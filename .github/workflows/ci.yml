@@ -5,16 +5,19 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Calls a local reusable workflow so the check reports as "checks / checks",
+  # like the org repos. The org's shared ci-python.yml cannot be used yet: it
+  # hard-codes `uv sync --dev --locked` (no --all-packages), so the workspace
+  # members (projects/hw-setup and its lerobot dependency) would not be installed.
   checks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-      - run: uv sync --dev --locked --all-packages
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run ty check
-      - run: uv run pytest
+    permissions:
+      contents: read
+    uses: ./.github/workflows/checks.yml
