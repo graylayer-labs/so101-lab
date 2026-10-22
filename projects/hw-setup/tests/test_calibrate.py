@@ -86,6 +86,7 @@ def test_dry_run_prints_the_plan_and_touches_nothing(root, capsys) -> None:
     assert str(backup_path(old, NOW)) in out
     assert format_command(expected_argv(root, ArmRole.FOLLOWER)) in out
     assert "type 'c'" in out
+    assert "anything other than 'c' keeps the existing file" in out
 
 
 def test_dry_run_on_first_calibration_says_no_backup(root, capsys) -> None:
@@ -164,6 +165,8 @@ def test_lerobot_failure_returns_its_code_and_names_the_backup(root, capsys) -> 
     err = capsys.readouterr().err
     assert "exited with code 130" in err
     assert str(backup_path(old, NOW)) in err
+    # The file may be truncated mid-save, so the restore command is printed.
+    assert f"cp {backup_path(old, NOW)} {old}" in err
 
 
 def test_no_file_after_a_clean_run_is_an_error(root, capsys) -> None:
@@ -200,11 +203,83 @@ def test_missing_local_config_is_an_error(root, capsys) -> None:
     assert runner.calls == []
 
 
-def test_unreadable_previous_file_is_backed_up_without_a_diff(root, capsys) -> None:
+class InterruptedLeRobot(FakeLeRobot):
+    def __call__(self, argv: list[str]) -> int:
+        self.calls.append(argv)
+        raise KeyboardInterrupt
+
+
+def test_ctrl_c_during_the_run_exits_130_with_the_restore_command(root, capsys) -> None:
+    old = install(root, "follower_main.json")
+    runner = InterruptedLeRobot(old, None)
+    assert run(root, runner, "--role", "follower") == 130
+    err = capsys.readouterr().err
+    backup = backup_path(old, NOW)
+    assert f"backed up at {backup}" in err
+    assert f"cp {backup} {old}" in err
+
+
+def test_ctrl_c_on_first_calibration_exits_130(root, capsys) -> None:
+    runner = InterruptedLeRobot(target(root), None)
+    assert run(root, runner, "--role", "follower") == 130
+    assert "interrupted" in capsys.readouterr().err
+
+
+CORRUPT = ["{not json", "{}"]
+
+
+@pytest.mark.parametrize("text", CORRUPT, ids=["bad-json", "no-joints"])
+@pytest.mark.parametrize("dry", [False, True], ids=["run", "dry-run"])
+def test_unreadable_previous_file_is_refused_before_lerobot(
+    root, capsys, text: str, dry: bool
+) -> None:
+    # LeRobot itself crashes loading it (robots/robot.py L56) before asking.
+    old = target(root)
+    old.write_text(text)
+    runner = FakeLeRobot(old, "follower_recalibrated.json")
+    args = ["--role", "follower"] + (["--dry-run"] if dry else [])
+    assert run(root, runner, *args) == 1
+    err = capsys.readouterr().err
+    assert runner.calls == []
+    assert old.read_text() == text
+    assert not (old.parent / "backups").exists()
+    assert "unreadable" in err
+    assert f"mkdir -p {old.parent / 'backups'}" in err
+    assert f"mv {old} {backup_path(old, NOW)}" in err
+    assert "--move-corrupt" in err
+
+
+def test_move_corrupt_moves_the_file_aside_and_calibrates(root, capsys) -> None:
     old = target(root)
     old.write_text("{not json")
     runner = FakeLeRobot(old, "follower_recalibrated.json")
-    assert run(root, runner, "--role", "follower") == 0
+    assert run(root, runner, "--role", "follower", "--move-corrupt") == 0
     out = capsys.readouterr().out
-    assert "cannot read the previous file, so no diff" in out
-    assert backup_path(old, NOW).read_text() == "{not json"
+    backup = backup_path(old, NOW)
+    assert backup.read_text() == "{not json"
+    assert runner.calls == [expected_argv(root, ArmRole.FOLLOWER)]
+    assert runner.saw_backup == [backup]
+    assert f"Moved the unreadable {old} to {backup}" in out
+    assert "no diff" in out
+    assert "Sanity checks passed" in out
+
+
+def test_move_corrupt_dry_run_moves_nothing(root, capsys) -> None:
+    old = target(root)
+    old.write_text("{not json")
+    runner = FakeLeRobot(old, None)
+    assert run(root, runner, "--role", "follower", "--move-corrupt", "--dry-run") == 0
+    out = capsys.readouterr().out
+    assert f"would move the unreadable file to {backup_path(old, NOW)}" in out
+    assert old.read_text() == "{not json"
+    assert not (old.parent / "backups").exists()
+    assert runner.calls == []
+
+
+def test_move_corrupt_with_a_readable_file_is_a_normal_run(root, capsys) -> None:
+    old = install(root, "follower_main.json")
+    runner = FakeLeRobot(old, "follower_recalibrated.json")
+    assert run(root, runner, "--role", "follower", "--move-corrupt") == 0
+    out = capsys.readouterr().out
+    assert "Changes per joint:" in out
+    assert backup_path(old, NOW).is_file()
