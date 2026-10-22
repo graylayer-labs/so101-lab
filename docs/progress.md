@@ -2,6 +2,12 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · LeRobot installed in the workspace
+
+The new `hw-setup` project pins `lerobot[feetech]==0.6.1`, so LeRobot's arm
+tools now run from the workspace. `lerobot-find-port --help` works. No
+hardware has been connected yet.
+
 ## 2026-10-22 · Machine config is checked on load
 
 `so101` can now read `configs/local.yaml` and check it: each arm needs an id
