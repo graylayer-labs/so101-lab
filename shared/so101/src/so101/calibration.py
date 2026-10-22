@@ -12,6 +12,11 @@ from so101.arm import JOINT_NAMES, ArmRole
 
 # STS3215 servos report position as a 12-bit encoder count.
 ENCODER_MAX = 4095
+# A joint calibrated over fewer counts than this (about 17 degrees) was
+# almost certainly not moved through its range.
+MIN_RANGE_WIDTH = 200
+# The gripper opens over a limited span; outside it the file is suspect.
+GRIPPER_SPAN = (300, 2500)
 
 
 class CalibrationError(ValueError):
@@ -64,3 +69,42 @@ def _parse_joint(path: Path, name: str, entry: object) -> JointCalibration:
             f"0 <= range_min < range_max <= {ENCODER_MAX}"
         )
     return joint
+
+
+def check_calibration(calib: dict[str, JointCalibration]) -> None:
+    """Sanity-check a calibration; raise one CalibrationError listing every failure.
+
+    Each message names the joint and the check: ``range_order``,
+    ``range_width``, ``gripper_span`` or ``joint_id``.
+    """
+    problems: list[str] = []
+    for motor_id, name in enumerate(JOINT_NAMES, start=1):
+        joint = calib.get(name)
+        if joint is None:
+            problems.append(f"joint {name} failed check joint_id: missing")
+            continue
+        if joint.id != motor_id:
+            problems.append(
+                f"joint {name} failed check joint_id: id is {joint.id}, "
+                f"expected {motor_id}"
+            )
+        width = joint.range_max - joint.range_min
+        if joint.range_min >= joint.range_max:
+            problems.append(
+                f"joint {name} failed check range_order: range_min "
+                f"{joint.range_min} is not below range_max {joint.range_max}"
+            )
+            continue
+        if width < MIN_RANGE_WIDTH:
+            problems.append(
+                f"joint {name} failed check range_width: width {width} is "
+                f"below {MIN_RANGE_WIDTH}"
+            )
+        low, high = GRIPPER_SPAN
+        if name == "gripper" and not low <= width <= high:
+            problems.append(
+                f"joint {name} failed check gripper_span: span {width} is "
+                f"outside {low} to {high}"
+            )
+    if problems:
+        raise CalibrationError("; ".join(problems))
