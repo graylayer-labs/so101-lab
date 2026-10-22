@@ -41,12 +41,25 @@ _PREFIX = {ArmRole.FOLLOWER: "robot", ArmRole.LEADER: "teleop"}
 _TYPE = {ArmRole.FOLLOWER: FOLLOWER_TYPE, ArmRole.LEADER: LEADER_TYPE}
 
 
+class CalibrationRootError(ValueError):
+    """The repo root given to a builder is not the workspace root."""
+
+
 def calibration_dir(repo_root: Path, role: ArmRole) -> Path:
     """The folder LeRobot reads ``<id>.json`` from for this role.
 
     Same layout as ``so101.calibration_path``: ``hardware/calibration/<role>``.
+    The path is absolute, so the command works from any directory. A root
+    without ``hardware/calibration/`` is rejected: LeRobot would find no
+    ``<id>.json`` there and silently start a fresh calibration.
     """
-    return repo_root / CALIBRATION_ROOT / role.value
+    root = repo_root.resolve()
+    if not (root / CALIBRATION_ROOT).is_dir():
+        raise CalibrationRootError(
+            f"{root} has no {CALIBRATION_ROOT}/ folder; "
+            "pass the so101-lab workspace root as repo_root"
+        )
+    return root / CALIBRATION_ROOT / role.value
 
 
 def _arm_args(config: MachineConfig, role: ArmRole, repo_root: Path) -> list[str]:

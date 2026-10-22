@@ -6,7 +6,9 @@ process, so a wrong flag name or a bad cameras dict fails here. Parsing only
 builds config dataclasses: no robot is made and no serial port is opened.
 """
 
+import ast
 import dataclasses
+import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +24,7 @@ from lerobot.teleoperators import TeleoperatorConfig
 from lerobot.teleoperators.so_leader import SOLeaderTeleopConfig
 
 from hw_setup.lerobot_argv import (
+    CalibrationRootError,
     calibrate_argv,
     format_command,
     record_argv,
@@ -33,19 +36,20 @@ from so101.machine_config import load_machine_config
 
 REPO = Path(__file__).parents[3]
 CONFIG = load_machine_config(REPO / "configs" / "example.yaml")
-ROOT = Path("/repo")
+# The workspace root: builders reject a root without hardware/calibration/.
+ROOT = REPO.resolve()
 
 FOLLOWER = [
     "--robot.type=so101_follower",
     "--robot.port=/dev/tty.usbmodem0000000002",
     "--robot.id=main",
-    "--robot.calibration_dir=/repo/hardware/calibration/follower",
+    f"--robot.calibration_dir={ROOT}/hardware/calibration/follower",
 ]
 LEADER = [
     "--teleop.type=so101_leader",
     "--teleop.port=/dev/tty.usbmodem0000000001",
     "--teleop.id=main",
-    "--teleop.calibration_dir=/repo/hardware/calibration/leader",
+    f"--teleop.calibration_dir={ROOT}/hardware/calibration/leader",
 ]
 CAMERAS = (
     "--robot.cameras={"
@@ -126,10 +130,23 @@ def test_record_omits_unset_options():
     ]
 
 
-def test_calibration_dir_is_relative_to_repo_root():
-    argv = calibrate_argv(CONFIG, ArmRole.LEADER, REPO)
-    expected = REPO / "hardware" / "calibration" / "leader"
-    assert f"--teleop.calibration_dir={expected}" in argv
+def test_relative_repo_root_is_resolved(monkeypatch):
+    """A wrapper run from projects/hw-setup/ with Path("..") must still point
+    LeRobot at the real calibration files, or it silently recalibrates."""
+    monkeypatch.chdir(REPO / "projects" / "hw-setup")
+    argv = calibrate_argv(CONFIG, ArmRole.LEADER, Path("../.."))
+    assert f"--teleop.calibration_dir={ROOT}/hardware/calibration/leader" in argv
+
+
+def test_wrong_repo_root_is_rejected(tmp_path):
+    with pytest.raises(CalibrationRootError, match="hardware/calibration"):
+        calibrate_argv(CONFIG, ArmRole.LEADER, tmp_path)
+
+
+def test_wrong_relative_repo_root_is_rejected(monkeypatch):
+    monkeypatch.chdir(REPO / "projects" / "hw-setup")
+    with pytest.raises(CalibrationRootError, match="hardware/calibration"):
+        teleoperate_argv(CONFIG, Path("."))
 
 
 def test_format_command_quotes_for_the_shell():
@@ -170,6 +187,29 @@ class RecordArgs:
     dataset: DatasetArgs  # ty: ignore[invalid-type-form]  # made at runtime
     teleop: TeleoperatorConfig | None = None
     display_data: bool = False
+
+
+def _record_config_fields() -> set[str]:
+    """RecordConfig's field names, read from its source with ast, because the
+    module cannot be imported without lerobot[dataset]."""
+    spec = importlib.util.find_spec("lerobot.scripts.lerobot_record")
+    assert spec is not None and spec.origin is not None
+    tree = ast.parse(Path(spec.origin).read_text())
+    (cls,) = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "RecordConfig"
+    ]
+    return {
+        stmt.target.id
+        for stmt in cls.body
+        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+    }
+
+
+def test_record_args_mirror_lerobot_record_config():
+    fields = {f.name for f in dataclasses.fields(RecordArgs)}
+    assert fields <= _record_config_fields()
 
 
 def parse(config_class, argv):
