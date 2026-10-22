@@ -2,6 +2,17 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Teleop starts only with valid calibrations
+
+`uv run so101-teleop` starts `lerobot-teleoperate` for the leader and
+follower, with `--no-cameras` and `--display` options. Before anything else
+it loads `hardware/calibration/<role>/<id>.json` for both arms (the id comes
+from `configs/local.yaml`) and runs the calibration sanity checks. If a file
+is missing or fails, it names the arm and the problem and exits 1, also with
+`--dry-run`, which otherwise prints the exact command and runs nothing. The
+tests use temporary workspaces with copies of the committed calibrations.
+Nothing was run on hardware.
+
 ## 2026-10-22 · Motor setup is a guided command
 
 `uv run so101-setup-motors --role leader|follower` prints the gripper-first
