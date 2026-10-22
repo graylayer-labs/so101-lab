@@ -174,10 +174,18 @@ check runs first, also with `--dry-run`. Then:
   given instead of adding a date-time tag; the printed root is where the data
   goes.
 - An existing dataset root is refused unless you pass `--resume`: LeRobot
-  cannot create a dataset in an existing folder. `--resume` needs
-  `meta/info.json` under the root, and `--episodes` then counts the episodes
-  to add. Without local metadata it refuses, because LeRobot would try to
-  download it from the Hub.
+  cannot create a dataset in an existing folder. With `--resume`,
+  `--episodes` counts the episodes to add.
+- `--resume` needs the full local metadata: `meta/info.json`, plus
+  `meta/tasks.parquet` and `meta/episodes/*/*.parquet` once info counts
+  tasks and episodes. If any of these is missing, LeRobot would download
+  `meta/` for that name from the Hub, possibly a stranger's dataset, so it is
+  refused.
+- A root with incomplete metadata (for example after a crash) is reported as
+  an incomplete dataset, with an `mv <root> <root>.broken-<time>` command to
+  set it aside. Nothing is deleted.
+- New dataset names may not start with `eval_` (LeRobot keeps them for policy
+  evaluation). Resuming an existing `eval_` dataset is allowed, as in LeRobot.
 - `--episode-time-s`, `--reset-time-s` and `--fps` are passed only when
   given (LeRobot's defaults: 60 s, 60 s, 30 fps). `--no-cameras`,
   `--display` and `--config PATH` work as in `so101-teleop`.
