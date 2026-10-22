@@ -6,21 +6,15 @@ process, so a wrong flag name or a bad cameras dict fails here. Parsing only
 builds config dataclasses: no robot is made and no serial port is opened.
 """
 
-import ast
-import dataclasses
-import importlib.util
-from dataclasses import dataclass
 from pathlib import Path
 
 import draccus
 import pytest
-from lerobot.configs.dataset import DatasetRecordConfig
-from lerobot.robots import RobotConfig
 from lerobot.robots.so_follower import SOFollowerRobotConfig
 from lerobot.scripts.lerobot_calibrate import CalibrateConfig
+from lerobot.scripts.lerobot_record import RecordConfig
 from lerobot.scripts.lerobot_setup_motors import SetupConfig
 from lerobot.scripts.lerobot_teleoperate import TeleoperateConfig
-from lerobot.teleoperators import TeleoperatorConfig
 from lerobot.teleoperators.so_leader import SOLeaderTeleopConfig
 
 from hw_setup.lerobot_argv import (
@@ -159,59 +153,6 @@ def test_format_command_quotes_for_the_shell():
 # --- LeRobot 0.6.1 accepts every argv ------------------------------------
 
 
-# DatasetRecordConfig's encoder sub-configs validate with `av`, which comes
-# with lerobot[dataset], not lerobot[feetech]. This copy keeps every other
-# field of the real class (same names, types and defaults), so the
-# --dataset.* flag names are still checked against LeRobot.
-DatasetArgs = dataclasses.make_dataclass(
-    "DatasetArgs",
-    [
-        (f.name, f.type, dataclasses.field(default=f.default))
-        if f.default is not dataclasses.MISSING
-        else (f.name, f.type, dataclasses.field(default_factory=f.default_factory))
-        for f in dataclasses.fields(DatasetRecordConfig)
-        if f.name not in ("rgb_encoder", "depth_encoder")
-    ],
-)
-
-
-@dataclass
-class RecordArgs:
-    """The fields of lerobot.scripts.lerobot_record.RecordConfig (L170-190).
-
-    That module imports `datasets`, which lerobot[feetech] does not install,
-    so the real class cannot be imported here.
-    """
-
-    robot: RobotConfig
-    dataset: DatasetArgs  # ty: ignore[invalid-type-form]  # made at runtime
-    teleop: TeleoperatorConfig | None = None
-    display_data: bool = False
-
-
-def _record_config_fields() -> set[str]:
-    """RecordConfig's field names, read from its source with ast, because the
-    module cannot be imported without lerobot[dataset]."""
-    spec = importlib.util.find_spec("lerobot.scripts.lerobot_record")
-    assert spec is not None and spec.origin is not None
-    tree = ast.parse(Path(spec.origin).read_text())
-    (cls,) = [
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "RecordConfig"
-    ]
-    return {
-        stmt.target.id
-        for stmt in cls.body
-        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-    }
-
-
-def test_record_args_mirror_lerobot_record_config():
-    fields = {f.name for f in dataclasses.fields(RecordArgs)}
-    assert fields <= _record_config_fields()
-
-
 def parse(config_class, argv):
     assert argv[0].startswith("lerobot-")
     return draccus.parse(config_class=config_class, args=argv[1:])
@@ -260,7 +201,7 @@ def test_lerobot_parses_record():
         fps=30,
         push_to_hub=False,
     )
-    cfg = parse(RecordArgs, argv)
+    cfg = parse(RecordConfig, argv)
     assert cfg.dataset.single_task == "Pick up the red cube"
     assert cfg.dataset.num_episodes == 3
     assert Path(cfg.dataset.root) == Path("/data/x")
@@ -274,3 +215,10 @@ def test_lerobot_rejects_an_unknown_flag():
     argv = [*calibrate_argv(CONFIG, ArmRole.LEADER, ROOT), "--teleop.calib_dir=x"]
     with pytest.raises(SystemExit):
         parse(CalibrateConfig, argv)
+
+
+def test_lerobot_rejects_an_unknown_record_flag():
+    """The real RecordConfig checks --dataset.* names too."""
+    argv = record_argv(CONFIG, ROOT, repo_id="a/b", single_task="T", num_episodes=1)
+    with pytest.raises(SystemExit):
+        parse(RecordConfig, [*argv, "--dataset.push_to_hubb=false"])

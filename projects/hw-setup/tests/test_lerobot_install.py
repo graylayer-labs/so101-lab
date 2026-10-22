@@ -8,3 +8,8 @@ def test_lerobot_imports_at_the_pinned_version():
     import lerobot  # noqa: F401
 
     assert version("lerobot") == PINNED
+
+
+def test_lerobot_record_imports():
+    # Needs the `dataset` extra (datasets, av); lerobot[feetech] alone fails.
+    import lerobot.scripts.lerobot_record  # noqa: F401
