@@ -124,6 +124,29 @@ def test_record_omits_unset_options():
     ]
 
 
+def test_record_resume_no_stamp_and_no_cameras():
+    argv = record_argv(
+        CONFIG,
+        ROOT,
+        repo_id="a/b",
+        single_task="Task",
+        num_episodes=1,
+        cameras=False,
+        no_stamp=True,
+        resume=True,
+    )
+    assert argv == [
+        "lerobot-record",
+        *FOLLOWER,
+        *LEADER,
+        "--dataset.repo_id=a/b",
+        "--dataset.single_task=Task",
+        "--dataset.num_episodes=1",
+        "--dataset.no_stamp=true",
+        "--resume=true",
+    ]
+
+
 def test_relative_repo_root_is_resolved(monkeypatch):
     """A wrapper run from projects/hw-setup/ with Path("..") must still point
     LeRobot at the real calibration files, or it silently recalibrates."""
@@ -200,8 +223,12 @@ def test_lerobot_parses_record():
         reset_time_s=5,
         fps=30,
         push_to_hub=False,
+        no_stamp=True,
+        resume=True,
     )
     cfg = parse(RecordConfig, argv)
+    assert cfg.resume is True
+    assert cfg.dataset.no_stamp is True
     assert cfg.dataset.single_task == "Pick up the red cube"
     assert cfg.dataset.num_episodes == 3
     assert Path(cfg.dataset.root) == Path("/data/x")
