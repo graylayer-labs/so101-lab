@@ -1,0 +1,22 @@
+# Copy this folder to projects/<name>/, then replace my-project / my_project
+# with the new name (here, in src/ and in tests/).
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "my-project"
+version = "0.1.0"
+description = "<one line: what this project does with the arm>"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Eoin McAllister" }]
+dependencies = ["so101"]
+
+[tool.uv.sources]
+so101 = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/my_project"]
