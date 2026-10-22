@@ -11,7 +11,7 @@ script checks before a servo moves, shows the real `--dry-run` output and
 says what to do when it fails. It ends with a quick-reference list of
 commands, a troubleshooting table and what has not been tested.
 
-Nothing has run on the arms yet; every output is a dry run or an error case
+None of the `so101-*` scripts has run on the arms yet (the arms were calibrated outside them, #39); every output is a dry run or an error case
 with no arm attached. The sample in the `hw-setup` README no longer carries a
 personal device name, and its `tty` example now uses the `cu` name. Issue #27.
 
