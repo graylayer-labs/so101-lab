@@ -12,7 +12,7 @@ are done and note anything that differed from the upstream guide.
 
 ## Parts
 
-- [ ] Every row of `hardware/bom.md` filled in and received.
+- [ ] Every row of [`hardware/bom.md`](../hardware/bom.md) filled in and received. Check each servo's voltage against its power supply first.
 - [ ] Printed parts for both arms.
 
 ## Servos

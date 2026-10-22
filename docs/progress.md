@@ -2,6 +2,14 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · The bill of materials lists every part, with gearing, voltage and EUR prices
+
+`hardware/bom.md` now shows which gearing each joint of the leader and
+follower needs, which servo voltage goes with which power supply (5 V or
+12 V), the bus servo adapter board and indicative EUR prices from upstream.
+It also explains why a wrong supply can burn out a servo. Parts the owner
+still has to confirm are marked with #29. Links: issue #28.
+
 ## 2026-10-22 · One command finds the arm ports and fills in `local.yaml`
 
 `uv run so101-find-ports` asks you to unplug and replug the leader and then
