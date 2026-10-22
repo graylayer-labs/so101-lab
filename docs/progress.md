@@ -2,6 +2,16 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Recalibrating an arm shows what changed per joint
+
+`uv run so101-calibrate --role leader|follower` runs LeRobot's calibration
+and saves the result in `hardware/calibration/<role>/<id>.json`. The old file
+is backed up first, the new one is checked for impossible values, and a table
+shows each joint whose offset or range changed. If the check fails, it says
+where the backup is and how to put it back. `--dry-run` prints the exact
+LeRobot command and changes nothing. Tested with a fake LeRobot only; it has
+not been run on the real arms yet.
+
 ## 2026-10-22 · Teleop starts only with valid calibrations
 
 `uv run so101-teleop` starts `lerobot-teleoperate` for the leader and
