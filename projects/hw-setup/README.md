@@ -17,6 +17,7 @@ any import or install error.
 - Done: `lerobot[feetech]==0.6.1` pinned and installed; LeRobot commands
   built from the machine config (`hw_setup.lerobot_argv`).
 - Done: `so101-setup-motors` (guided motor setup, `--dry-run`).
+- Done: `so101-teleop` (calibration-gated teleoperation, `--dry-run`).
 - Doing: nothing.
 - Done: `so101-find-ports` (tested with fakes; not yet run on hardware).
 - Next: set motor IDs (needs hardware).
@@ -91,6 +92,22 @@ and the power warning (the leader always uses 5 V; the follower uses 5 V, or
 `--config PATH` overrides the default `configs/local.yaml` in the workspace
 root, which is found from the package, not the current directory. If that
 file is missing the command fails with a hint; it never uses the example.
+## Teleoperate
+
+```bash
+uv run so101-teleop --dry-run            # check calibrations, print the command
+uv run so101-teleop --no-cameras         # leader drives follower, no cameras
+uv run so101-teleop --display            # also show the data live
+```
+
+First it checks `hardware/calibration/<role>/<id>.json` for both arms (the id
+is from the machine config) with `so101.load_calibration` and
+`so101.check_calibration`. If either file is missing or fails, it prints the
+arm and the problem to stderr and exits 1; this also applies to `--dry-run`.
+Then it runs `lerobot-teleoperate` (or, with `--dry-run`, prints the exact
+command and exits 0). Cameras are on by default; `--config PATH` overrides
+`configs/local.yaml` in the workspace root, which has no fallback to the
+example.
 
 ## Layout
 
