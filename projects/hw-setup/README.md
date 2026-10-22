@@ -9,7 +9,7 @@ LeRobot is installed in the workspace and the arm tools run from it.
 
 ## Expected results
 
-`uv run lerobot-find-port --help` exits 0. Success is exit code 0; failure is
+`uv run lerobot-calibrate --help` exits 0. Success is exit code 0; failure is
 any import or install error.
 
 ## Status (2026-10-22)
