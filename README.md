@@ -14,11 +14,10 @@ same version.
 
 - Done: uv workspace with a shared `so101` package and a copyable project
   template.
-- Done: the machine config loader, and LeRobot 0.6.1 pinned in `hw-setup`
-  (#38).
-- Doing: calibration checks (#19), the repo standard (#40) and the arm
-  bring-up scripts.
-- Next: an SO-101 playbook (#27).
+- Done: the machine config loader (#35), LeRobot 0.6.1 pinned in `hw-setup`
+  (#38) and calibration sanity checks (#36).
+- Doing: the repo standard (#40, #12, #37) and test coverage (#41).
+- Next: arm bring-up scripts (#11, #13-#18) and an SO-101 playbook (#27).
 
 ## Pipeline
 
