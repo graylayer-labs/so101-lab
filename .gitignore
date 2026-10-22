@@ -27,6 +27,9 @@ outputs/
 wandb/
 *.mp4
 
+# Calibration backups written by so101-calibrate (machine-local)
+hardware/calibration/*/backups/
+
 # LeRobot caches and local datasets
 .cache/
 lerobot_cache/

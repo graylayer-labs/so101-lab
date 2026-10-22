@@ -20,6 +20,7 @@ any import or install error.
 - Done: `so101-teleop` (calibration-gated teleoperation, `--dry-run`).
 - Doing: nothing.
 - Done: `so101-find-ports` (tested with fakes; not yet run on hardware).
+- Done: `so101-calibrate` (tested with fakes; not yet run on hardware).
 - Next: set motor IDs (needs hardware).
 
 ## Find the ports
@@ -42,6 +43,41 @@ socket: the macOS port name depends on the socket.
 
 This does not call `lerobot-find-port`: that tool blocks on `input()`,
 globs `/dev/tty*` and writes nothing, so it cannot be tested or scripted.
+
+## Calibrate an arm
+
+```bash
+uv run so101-calibrate --role follower --dry-run   # print the plan; touches nothing
+uv run so101-calibrate --role follower             # needs the arm plugged in
+```
+
+It runs `lerobot-calibrate` for one arm (`--role leader` or `follower`) with
+`calibration_dir` set to `hardware/calibration/<role>`, so the result lands in
+`hardware/calibration/<role>/<id>.json`, with `<id>` from
+`configs/local.yaml` (or `--config PATH`).
+
+- Before the run, an existing file is copied to
+  `hardware/calibration/<role>/backups/<id>.<UTC time>.json.bak`. LeRobot only
+  reads `<id>.json`, and the `.bak` suffix keeps backups out of the CI check
+  on every `*.json`. The `backups/` folders are gitignored.
+- When the file exists, LeRobot asks first: type `c` and press ENTER to
+  recalibrate. Anything other than `c` keeps the existing file; the script
+  then says the file is unchanged and removes the identical backup.
+- An existing file that cannot be loaded or fails the sanity checks is
+  refused before LeRobot runs; the error says whether LeRobot itself would
+  crash loading it. The error prints the `mv` command
+  that moves it to the backup path; `--move-corrupt` does that move and
+  calibrates from scratch.
+- Ctrl-C during the run (exit 130) or a LeRobot error prints the backup path
+  and the `cp` command to restore it, since the file may be half-written.
+- After the run, the new file is loaded, checked with
+  `so101.check_calibration`, and compared with the old one per joint.
+- First calibration (no file yet): no backup and no diff, and it says so.
+- A failed check exits 1 and prints where the backup is and the `cp` command
+  to restore it. Nothing is restored automatically: the motors already hold
+  the new values, and the checks may be wrong for your arm. After a restore,
+  LeRobot notices the file and motors differ on the next connect and asks to
+  write the file to the motors.
 
 ## LeRobot commands
 
