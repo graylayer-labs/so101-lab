@@ -56,7 +56,12 @@ def line_for(out: str, name: str) -> str:
 
 def test_pin_matches_pyproject() -> None:
     data = tomllib.loads((REPO / "projects/hw-setup/pyproject.toml").read_text())
-    assert f"lerobot[feetech]=={LEROBOT_PIN}" in data["project"]["dependencies"]
+    pins = [
+        dep.split("==", 1)[1]
+        for dep in data["project"]["dependencies"]
+        if dep.split("[", 1)[0].split("==", 1)[0].strip() == "lerobot"
+    ]
+    assert pins == [LEROBOT_PIN]
 
 
 def test_all_pass_exits_zero(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
