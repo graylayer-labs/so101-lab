@@ -128,7 +128,7 @@ FAIL  ports: an arm port is not present
         fix: plug in both arms and run: so101-find-ports  (or fix arms.<role>.port in configs/local.yaml)
 PASS  calibration: leader and follower pass the checks
 PASS  cameras: 2 listed, 2 configured (compares counts only)
-        listed by the OS: MacBook Pro Camera, Eoin’s iPhone Camera
+        listed by the OS: MacBook Pro Camera, iPhone Camera (Continuity)
         this compares counts only: Linux may list two /dev/video* entries per camera, and phantom cameras (an iPhone Continuity camera) count too, so a PASS does not prove the right cameras are there; use --open-cameras
         not opened; add --open-cameras to open each configured index
 
@@ -150,7 +150,7 @@ from so101 import ArmRole, load_machine_config
 repo = Path(".")
 config = load_machine_config(repo / "configs" / "local.yaml")
 print(format_command(calibrate_argv(config, ArmRole.LEADER, repo.resolve())))
-# lerobot-calibrate --teleop.type=so101_leader --teleop.port=/dev/tty.usbmodem...
+# lerobot-calibrate --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem...
 #   --teleop.id=main --teleop.calibration_dir=<repo>/hardware/calibration/leader
 ```
 

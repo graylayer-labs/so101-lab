@@ -2,6 +2,19 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · One runbook takes you from the box to the first dataset
+
+`docs/setup.md` now lists every step in order: check the parts and power
+supplies, find the ports, set the motor IDs, assemble, calibrate, run the
+doctor, teleoperate, record. Each step names its script, says what the
+script checks before a servo moves, shows the real `--dry-run` output and
+says what to do when it fails. It ends with a quick-reference list of
+commands, a troubleshooting table and what has not been tested.
+
+None of the `so101-*` scripts has run on the arms yet (the arms were calibrated outside them, #39); every output is a dry run or an error case
+with no arm attached. The sample in the `hw-setup` README no longer carries a
+personal device name, and its `tty` example now uses the `cu` name. Issue #27.
+
 ## 2026-10-22 · CI reports as checks / checks with pinned actions
 
 The CI check now reports as `checks / checks`, the same name the other org

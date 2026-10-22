@@ -12,14 +12,11 @@ same version.
 
 ## Where it's at (2026-10-22)
 
-- Done: uv workspace with a shared `so101` package and a copyable project
-  template.
-- Done: the machine config loader (#35), LeRobot 0.6.1 pinned in `hw-setup`
-  (#38) and calibration sanity checks (#36).
-- Doing: the repo standard (#40, #12) and test coverage (#41).
-- Next: arm bring-up scripts (#11, #13-#18) and the setup runbook (#27).
-- Hardware: both arms have a first calibration (#39); parts, assembly and
-  servo IDs are owner steps (#29-#31).
+- Done: uv workspace with a shared `so101` package, the machine config loader and calibration checks and files.
+- Done: the bring-up tools (#13-#18): find ports, set motor IDs, calibrate, teleoperate, record locally and the doctor. All tested with fakes only.
+- Done: the bill of materials (`hardware/bom.md`) and the runbook, [`docs/setup.md`](docs/setup.md).
+- Next: the owner's hardware steps (#29-#33), following `docs/setup.md`. None of the `so101-*` scripts has run on the arms yet; both arms already have a first calibration (#39), made outside them.
+- Next: shared CI (#12).
 
 ## Pipeline
 
@@ -40,9 +37,9 @@ its own goal, expected results and status.
 | `projects/` | One folder per project; `projects/_template/` is the skeleton to copy. |
 | `hardware/` | Calibration JSON, URDF, CAD and the bill of materials. |
 | `configs/` | Machine config (ports, cameras): `example.yaml` committed, `local.yaml` not. |
-| `scripts/` | Planned setup scripts around the LeRobot CLIs. |
+| `scripts/` | Reserved for thin wrappers around the LeRobot CLIs; holds only a README. The `so101-*` commands live in `projects/hw-setup`. |
 | `docs/progress.md` | What changed, newest first. |
-| `docs/setup.md` | Assembly and software setup checklist. |
+| `docs/setup.md` | The runbook: unboxing to the first recorded dataset, one script per step. |
 | `docs/decisions.md` | One line per decision and its reason. |
 
 ## Setup
