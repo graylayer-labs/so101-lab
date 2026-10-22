@@ -14,6 +14,8 @@ dev = [
     "pytest>=8.3",
     "ruff>=0.11",
     "ty>=0.0.1a16",
+    # Type stubs for so101's pyyaml; only needed for ty, not at runtime.
+    "types-pyyaml>=6.0.12.20260906",
 ]
 
 [tool.pytest.ini_options]
