@@ -2,6 +2,16 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · A doctor command checks the setup before you touch hardware
+
+`uv run so101-doctor` reports PASS, WARN or FAIL for the LeRobot version
+(must be the pinned 0.6.1), the machine config, whether each configured serial
+port is present, the calibration files and the cameras. Every problem comes
+with the command that fixes it. It opens no port and runs no LeRobot, so it is
+safe with no arm attached; cameras are only listed unless you pass
+`--open-cameras`. Tested with fakes only. Sample output is in
+`projects/hw-setup/README.md`.
+
 ## 2026-10-22 · Recording a local dataset is one command
 
 `uv run so101-record --task TEXT --repo-id USER/NAME --episodes N` runs

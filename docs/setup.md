@@ -9,6 +9,8 @@ are done and note anything that differed from the upstream guide.
 - [ ] `git lfs install` (once per machine, before adding CAD files).
 - [ ] Copy `configs/example.yaml` to `configs/local.yaml`.
 - [ ] Install LeRobot with the Feetech extra, in the first project that needs it.
+- [ ] Run `uv run so101-doctor` to check the setup; sample output is in
+      `projects/hw-setup/README.md`. It fixes nothing and works with no arm attached.
 
 ## Parts
 
