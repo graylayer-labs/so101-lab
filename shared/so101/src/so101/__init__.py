@@ -7,13 +7,25 @@ from so101.calibration import (
     calibration_path,
     load_calibration,
 )
+from so101.machine_config import (
+    ArmPort,
+    CameraSettings,
+    MachineConfig,
+    MachineConfigError,
+    load_machine_config,
+)
 
 __all__ = [
     "JOINT_NAMES",
+    "ArmPort",
     "ArmConfig",
     "ArmRole",
     "CalibrationError",
+    "CameraSettings",
     "JointCalibration",
+    "MachineConfig",
+    "MachineConfigError",
     "calibration_path",
     "load_calibration",
+    "load_machine_config",
 ]
