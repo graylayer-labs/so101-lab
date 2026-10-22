@@ -2,6 +2,17 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Motor setup is a guided command
+
+`uv run so101-setup-motors --role leader|follower` prints the gripper-first
+wiring order, the gear ratio of each joint (checked against `hardware/bom.md`)
+and the power warning, asks for confirmation, then runs
+`lerobot-setup-motors` for that arm. `--dry-run` prints the same plus the
+exact command and runs nothing. The config defaults to
+`configs/local.yaml` in the workspace, wherever the command is run from; it
+does not fall back to the example. The tests use a fake runner and fake
+input. Nothing was run on hardware.
+
 ## 2026-10-22 · The bill of materials lists every part, with gearing, voltage and EUR prices
 
 `hardware/bom.md` now shows which gearing each joint of the leader and

@@ -16,6 +16,7 @@ any import or install error.
 
 - Done: `lerobot[feetech]==0.6.1` pinned and installed; LeRobot commands
   built from the machine config (`hw_setup.lerobot_argv`).
+- Done: `so101-setup-motors` (guided motor setup, `--dry-run`).
 - Doing: nothing.
 - Done: `so101-find-ports` (tested with fakes; not yet run on hardware).
 - Next: set motor IDs (needs hardware).
@@ -73,6 +74,23 @@ print(format_command(calibrate_argv(config, ArmRole.LEADER, repo.resolve())))
   lists the source file and line of each.
 - `lerobot-record` needs `lerobot[dataset]`, which is not installed yet:
   the record command can be built and printed but not run.
+
+## Set the motor IDs
+
+```bash
+uv run so101-setup-motors --role leader --dry-run   # show everything, run nothing
+uv run so101-setup-motors --role follower           # asks, then runs LeRobot
+```
+
+Before it runs anything it prints the wiring order (gripper first, one motor
+on the controller board at a time), the gear ratio of each joint (leader
+1/191 on joints 1 and 3, 1/345 on 2, 1/147 on 4 to 6; follower 1/345 on all)
+and the power warning (the leader always uses 5 V; the follower uses 5 V, or
+12 V with 12 V servos). Then it asks `y` to continue; anything else exits 1.
+`--dry-run` also prints the exact command and exits 0 without asking.
+`--config PATH` overrides the default `configs/local.yaml` in the workspace
+root, which is found from the package, not the current directory. If that
+file is missing the command fails with a hint; it never uses the example.
 
 ## Layout
 
