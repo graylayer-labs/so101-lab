@@ -22,5 +22,5 @@ jobs:
       - run: uv sync --dev --locked --all-packages
       - run: uv run --locked ruff check .
       - run: uv run --locked ruff format --check .
-      - run: uv run --locked ty check
+      - run: uv run --locked ty check --error-on-warning
       - run: uv run --locked pytest
