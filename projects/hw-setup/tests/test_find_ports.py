@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -176,3 +177,100 @@ def test_invalid_result_is_not_written(tmp_path, capsys):
     assert code == 1
     assert config.read_text() == before
     assert "arms.leader.port" in capsys.readouterr().err
+
+
+def test_same_port_for_both_arms_is_an_error():
+    board = FakeBoard([LEADER, None, LEADER, None])
+    with pytest.raises(FindPortsError, match="same port"):
+        find_ports(board.lister, board.input, sleep=lambda _s: None)
+
+
+def test_unplug_is_retried_until_the_port_disappears():
+    present = {LEADER, FOLLOWER}
+    calls = {"after_enter": 0}
+    entered = {"v": False}
+
+    def lister() -> list[str]:
+        if entered["v"]:
+            calls["after_enter"] += 1
+            if calls["after_enter"] == 3:
+                present.discard(LEADER)
+        return sorted(present)
+
+    def inp(prompt: str = "") -> str:
+        if "leader" in prompt and "Unplug" in prompt:
+            entered["v"] = True
+        elif "Plug" in prompt:
+            present.add(LEADER)
+        return ""
+
+    ports = find_ports(lister, inp, sleep=lambda _s: None, roles=(ArmRole.LEADER,))
+    assert ports == {ArmRole.LEADER: LEADER}
+
+
+def test_replug_error_says_to_use_the_same_socket():
+    board = FakeBoard([LEADER])
+    with pytest.raises(FindPortsError, match="same USB socket"):
+        find_ports(board.lister, board.input, sleep=lambda _s: None)
+
+
+def _workspace(tmp_path: Path) -> Path:
+    root = tmp_path / "ws"
+    (root / "configs").mkdir(parents=True)
+    (root / "configs" / "example.yaml").write_text(EXAMPLE.read_text())
+    (root / "projects" / "hw-setup").mkdir(parents=True)
+    return root
+
+
+def test_default_config_is_the_workspace_one_even_from_a_subdirectory(
+    tmp_path, monkeypatch, capsys
+):
+    root = _workspace(tmp_path)
+    monkeypatch.chdir(root / "projects" / "hw-setup")
+    board = _board()
+    code = main([], lister=board.lister, input_fn=board.input, sleep=lambda _s: None)
+    assert code == 0
+    target = (root / "configs" / "local.yaml").resolve()
+    assert load_machine_config(target).arms[ArmRole.LEADER].port == LEADER
+    assert not (root / "projects" / "hw-setup" / "configs").exists()
+    assert str(target) in capsys.readouterr().out
+
+
+def test_dry_run_prints_absolute_workspace_path(tmp_path, monkeypatch, capsys):
+    root = _workspace(tmp_path)
+    monkeypatch.chdir(root / "projects" / "hw-setup")
+    main(["--dry-run"])
+    assert str((root / "configs" / "local.yaml").resolve()) in capsys.readouterr().out
+    assert not (root / "configs" / "local.yaml").exists()
+
+
+def test_write_is_atomic(tmp_path, monkeypatch):
+    config = _local(tmp_path)
+    before = config.read_text()
+
+    def fail(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", fail)
+    board = _board()
+    with pytest.raises(OSError):
+        main(
+            ["--config", str(config)],
+            lister=board.lister,
+            input_fn=board.input,
+            sleep=lambda _s: None,
+        )
+    assert config.read_text() == before
+    assert list(tmp_path.iterdir()) == [config]  # temp file cleaned up
+
+
+def test_successful_write_leaves_no_temp_files(tmp_path):
+    config = _local(tmp_path)
+    board = _board()
+    main(
+        ["--config", str(config)],
+        lister=board.lister,
+        input_fn=board.input,
+        sleep=lambda _s: None,
+    )
+    assert list(tmp_path.iterdir()) == [config]

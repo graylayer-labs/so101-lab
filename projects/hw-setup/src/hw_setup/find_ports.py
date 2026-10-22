@@ -12,7 +12,10 @@ On macOS pyserial lists ``/dev/cu.usbmodem*``; LeRobot accepts either the
 """
 
 import argparse
+import contextlib
+import os
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -28,7 +31,7 @@ SleepFn = Callable[[float], None]
 
 # Time for the OS to drop or restore the device after the cable moves.
 SETTLE_SECONDS = 0.5
-REPLUG_TRIES = 10
+SETTLE_TRIES = 10
 ROLES = (ArmRole.LEADER, ArmRole.FOLLOWER)
 
 
@@ -47,14 +50,19 @@ def find_ports(
     lister: PortLister = list_serial_ports,
     input_fn: InputFn = input,
     sleep: SleepFn = time.sleep,
+    roles: tuple[ArmRole, ...] = ROLES,
 ) -> dict[ArmRole, str]:
     """Ask the owner to unplug and replug each arm; return role -> port."""
     found: dict[ArmRole, str] = {}
-    for role in ROLES:
+    for role in roles:
         before = set(lister())
         input_fn(f"Unplug the USB cable of the {role.value} arm, then press Enter. ")
-        sleep(SETTLE_SECONDS)
-        gone = sorted(before - set(lister()))
+        gone: list[str] = []
+        for _ in range(SETTLE_TRIES):
+            sleep(SETTLE_SECONDS)
+            gone = sorted(before - set(lister()))
+            if gone:
+                break
         if not gone:
             raise FindPortsError(
                 f"{role.value}: no port disappeared; is it plugged in?"
@@ -65,12 +73,15 @@ def find_ports(
             )
         port = gone[0]
         input_fn(f"Plug the {role.value} arm back in, then press Enter. ")
-        for _ in range(REPLUG_TRIES):
+        for _ in range(SETTLE_TRIES):
             sleep(SETTLE_SECONDS)
             if port in lister():
                 break
         else:
-            raise FindPortsError(f"{role.value}: {port} did not come back after replug")
+            raise FindPortsError(
+                f"{role.value}: {port} did not come back after replug. Plug the "
+                "cable into the same USB socket: the port name depends on the socket."
+            )
         found[role] = port
     if len(set(found.values())) != len(found):
         raise FindPortsError(f"both arms gave the same port: {found}")
@@ -89,11 +100,13 @@ def merge_ports(data: object, ports: dict[ArmRole, str]) -> dict:
     return data
 
 
-def _default_example() -> Path:
-    for parent in (Path.cwd(), *Path.cwd().parents):
+def find_workspace_root(start: Path | None = None) -> Path | None:
+    """Nearest folder at or above ``start`` with ``configs/example.yaml``."""
+    here = (start or Path.cwd()).resolve()
+    for parent in (here, *here.parents):
         if (parent / "configs" / "example.yaml").is_file():
-            return parent / "configs" / "example.yaml"
-    return Path("configs/example.yaml")
+            return parent
+    return None
 
 
 def _read_base(config: Path, example: Path) -> tuple[object, bool]:
@@ -120,6 +133,20 @@ def _dry_run(config: Path, example: Path) -> None:
     print("The result is checked with so101.machine_config before it is written.")
 
 
+def _write_atomic(path: Path, text: str) -> None:
+    """Write via a temp file in the same folder, then replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
+        raise
+
+
 def main(
     argv: list[str] | None = None,
     lister: PortLister = list_serial_ports,
@@ -131,27 +158,42 @@ def main(
         description="Find each arm's serial port and write it to configs/local.yaml.",
     )
     parser.add_argument("--dry-run", action="store_true", help="print the plan only")
-    parser.add_argument("--config", type=Path, default=Path("configs/local.yaml"))
-    parser.add_argument("--example", type=Path, default=None)
+    parser.add_argument(
+        "--config", type=Path, help="default: <workspace root>/configs/local.yaml"
+    )
+    parser.add_argument(
+        "--example", type=Path, help="default: <workspace root>/configs/example.yaml"
+    )
     args = parser.parse_args(argv)
-    example = args.example or _default_example()
+    config, example = args.config, args.example
+    if config is None or example is None:
+        root = find_workspace_root()
+        if root is None:
+            print(
+                "error: no configs/example.yaml found above the current directory; "
+                "run from inside the workspace or pass --config and --example",
+                file=sys.stderr,
+            )
+            return 1
+        config = config or root / "configs" / "local.yaml"
+        example = example or root / "configs" / "example.yaml"
+    config, example = config.resolve(), example.resolve()
 
     if args.dry_run:
-        _dry_run(args.config, example)
+        _dry_run(config, example)
         return 0
     try:
-        data, _created = _read_base(args.config, example)
+        data, _created = _read_base(config, example)
         ports = find_ports(lister, input_fn, sleep)
         merged = merge_ports(data, ports)
         parse_machine_config(merged)
     except (FindPortsError, MachineConfigError) as err:
         print(f"error: {err}", file=sys.stderr)
         return 1
-    args.config.parent.mkdir(parents=True, exist_ok=True)
-    args.config.write_text(yaml.safe_dump(merged, sort_keys=False))
+    _write_atomic(config, yaml.safe_dump(merged, sort_keys=False))
     for role, port in ports.items():
         print(f"{role.value}: {port}")
-    print(f"Wrote {args.config}")
+    print(f"Wrote {config}")
     return 0
 
 
