@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+.venv/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.ty_cache/
+.mypy_cache/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets and machine-specific config
+.env
+configs/local.yaml
+
+# Data, outputs and recordings
+/data
+outputs/
+wandb/
+*.mp4
+
+# LeRobot caches and local datasets
+.cache/
+lerobot_cache/
+.cache/huggingface/
+
+# Claude Code local state
+.claude/worktrees/
+.claude/settings.local.json

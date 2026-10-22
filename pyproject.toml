@@ -1,0 +1,38 @@
+# uv workspace root. It is not a package itself: shared code lives in
+# shared/*, and each project in projects/* is its own package.
+
+[tool.uv.workspace]
+members = ["shared/*", "projects/*"]
+exclude = ["projects/_template"]
+
+[tool.uv.sources]
+so101 = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "so101",
+    "pytest>=8.3",
+    "ruff>=0.11",
+    "ty>=0.0.1a16",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q --import-mode=importlib"
+testpaths = ["shared", "projects"]
+norecursedirs = ["_template", ".*", "__pycache__"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+# So workspace packages sort as first-party imports.
+src = ["shared/*/src", "projects/*/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+# The template is copied, not installed, so its imports cannot resolve here.
+exclude = ["projects/_template"]
