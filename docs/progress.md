@@ -2,6 +2,17 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · One command finds the arm ports and fills in `local.yaml`
+
+`uv run so101-find-ports` asks you to unplug and replug the leader and then
+the follower arm, works out each arm's serial port from what disappeared, and
+writes both to `configs/local.yaml` without touching the other keys. The file
+is checked with the machine config validator before it is written, and
+`--dry-run` prints the plan and changes nothing. It does not use
+`lerobot-find-port`, which waits on the keyboard and saves nothing. Tested
+with fake ports and fake key presses only; it has not been run on the real
+arms yet.
+
 ## 2026-10-22 · Two calibrations can be compared joint by joint
 
 `so101.diff_calibrations` compares two calibrations and lists, for each joint,

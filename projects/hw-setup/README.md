@@ -17,7 +17,26 @@ any import or install error.
 - Done: `lerobot[feetech]==0.6.1` pinned and installed; LeRobot commands
   built from the machine config (`hw_setup.lerobot_argv`).
 - Doing: nothing.
-- Next: find the ports and set motor IDs (needs hardware).
+- Done: `so101-find-ports` (tested with fakes; not yet run on hardware).
+- Next: set motor IDs (needs hardware).
+
+## Find the ports
+
+```bash
+uv run so101-find-ports --dry-run   # print the plan; touches nothing
+uv run so101-find-ports             # needs both arms plugged in
+```
+
+For the leader and then the follower arm it asks you to unplug the USB cable,
+then plug it back in, and takes the port that disappeared. It lists ports with
+pyserial, which does not open them. It then writes `arms.leader.port` and
+`arms.follower.port` to `configs/local.yaml` (created from
+`configs/example.yaml` if missing), keeps the other keys, and refuses to write
+a file that fails `so101.machine_config`. Comments in an existing
+`local.yaml` are not kept. Use `--config` to write somewhere else.
+
+This does not call `lerobot-find-port`: that tool blocks on `input()`,
+globs `/dev/tty*` and writes nothing, so it cannot be tested or scripted.
 
 ## LeRobot commands
 

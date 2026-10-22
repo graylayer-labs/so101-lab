@@ -7,7 +7,7 @@ project that needs it.
 
 | Script | Wraps | What it does |
 |---|---|---|
-| `find_ports` | `lerobot-find-port` | Finds the serial port of each arm's controller board. |
+| `find_ports` | pyserial `list_ports` | Finds the serial port of each arm's controller board. Built: `uv run so101-find-ports` (see `projects/hw-setup/README.md`). |
 | `setup_motors` | `lerobot-setup-motors` | Sets the id and baud rate of each servo, one at a time. |
 | `calibrate` | `lerobot-calibrate` | Calibrates one arm and copies the result to `hardware/calibration/<role>/<arm_id>.json`. |
 | `teleop` | `lerobot-teleoperate` | Drives the follower from the leader, optionally with cameras. |
