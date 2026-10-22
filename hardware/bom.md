@@ -4,9 +4,8 @@ One row per part. Prices go in Notes with the currency and date.
 
 Prices are indicative, dated 2026-10-22. They are copied from the upstream
 SO-ARM100 page's EU column (Alibaba and Amazon.fr, already in EUR), not
-checked in a shop. Where upstream gives only USD, the EUR figure comes first
-with the USD in brackets and the rate is approx. 1 USD = 0.88 EUR (an
-assumption, not a quoted rate). Cost is per unit unless stated.
+checked in a shop. The USD figure in brackets is upstream's US-shop price for
+the same part, not a conversion. Cost is per unit unless stated.
 
 Parts marked **Confirm (#29)** are for the owner to check against what was
 actually bought or received.
@@ -16,9 +15,9 @@ actually bought or received.
 | Part | Qty | Source | Notes |
 |---|---|---|---|
 | Feetech STS3215 servo, 7.4 V, 1/345 (C001), follower | 6 | [Alibaba](https://www.alibaba.com/product-detail/Top-Seller-Low-Cost-Feetech-STS3215_1600999461525.html) | EUR 12.2 each (USD 13.89). **Confirm (#29)**: 7.4 V or 12 V variant. |
-| Feetech STS3215 servo, 7.4 V, leader, geared per table below | 6 | [Alibaba bundle of all six](https://www.alibaba.com/product-detail/6PCS-7-4V-STS3215-Servos-for_1601428584027.html) | 3 x 1/147 (C046), 2 x 1/191 (C044), 1 x 1/345 (C001). EUR 12.2 each (USD 13.89); bundle price not listed upstream. **Confirm (#29)**. |
+| Feetech STS3215 servo, 7.4 V, leader, geared per table below | 6 | [Alibaba bundle of all six](https://www.alibaba.com/product-detail/6PCS-7-4V-STS3215-Servos-for_1601428584027.html) | 3 x 1/147 (C046), 2 x 1/191 (C044), 1 x 1/345 (C001). EUR 12.2 each (USD 13.89); bundle price not listed upstream. **Confirm (#29)**: the gear mix, by the C0xx label on each servo. |
 | Servo bus controller board (Waveshare) | 2 | [Amazon.fr](https://www.amazon.fr/-/en/dp/B0CJ6TP3TP/) | One per arm. EUR 11.4 each (USD 10.6). **Confirm (#29)**: model and jumper position. |
-| Power supply, 5 V | 2 | [Amazon.fr](https://www.amazon.fr/-/en/dp/B01HRR9GY4/) | One per arm. EUR 15.7 each (USD 10). 12 V instead if the follower uses 12 V servos, see below. **Confirm (#29)**. |
+| Power supply, 5 V | 2 | [Amazon.fr](https://www.amazon.fr/-/en/dp/B01HRR9GY4/) | One per arm. EUR 15.7 each (USD 10). The leader's supply is always 5 V. Only the follower's changes: 12 V, 5 A or more, if it has 12 V servos (see below). **Confirm (#29)**: voltage printed on each supply. |
 | USB-C cable (pack of 2) | 1 | [Amazon.fr](https://www.amazon.fr/dp/B07BNF842T/) | One cable per board. EUR 7 per pack (USD 7). |
 | Printed arm parts (leader + follower) | 1 set | | STL in upstream SO-ARM100. **Confirm (#29)**: printed or bought. |
 | Camera | | | None in the upstream BOM, no price. See Cameras. **Confirm (#29)**: which camera. |
@@ -67,7 +66,7 @@ and gives no price, so none is listed here.
 Why the wrong PSU is dangerous (our reasoning, not upstream wording):
 
 - 12 V into a 7.4 V servo overvolts it. That can burn out the servo
-  electronics and the controller board. A 5 V and a 12 V supply look
+  electronics. A 5 V and a 12 V supply look
   alike and often share the same barrel plug, so they are easy to swap.
 - 5 V into 12 V servos does not break them but starves them: weak torque,
   stalls and resets.
