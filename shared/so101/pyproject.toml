@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Eoin McAllister" }]
-dependencies = []
+dependencies = [
+    "pyyaml>=6.0.3",
+    "types-pyyaml>=6.0.12.20260906",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/so101"]

@@ -2,6 +2,14 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Machine config is checked on load
+
+`so101` can now read `configs/local.yaml` and check it: each arm needs an id
+and a serial port that looks like one, and each camera needs an index, width,
+height and fps, with no two cameras sharing an index. A wrong file gives an
+error that names the key, such as `cameras.front.fps: missing`.
+`configs/example.yaml` passes. Nothing opens a port or a camera.
+
 ## 2026-10-22 · Repo scaffolded for the SO-101 arm
 
 There is now one place for everything about the SO-101 arms: a uv workspace
