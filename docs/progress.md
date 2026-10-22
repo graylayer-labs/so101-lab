@@ -2,6 +2,13 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Repo checked against the org standard
+
+The repo was checked row by row against the org's repo standard. The task
+issue template now uses the same headings as the board's issues and points at
+the project board, and local Claude session files no longer show up as
+untracked. The README status is refreshed.
+
 ## 2026-10-22 · Type stubs no longer installed with so101
 
 `types-pyyaml` moved from `so101`'s runtime dependencies to the workspace dev

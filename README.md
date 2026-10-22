@@ -12,10 +12,13 @@ same version.
 
 ## Where it's at (2026-10-22)
 
-- Done: repo scaffolded as a uv workspace, with a shared `so101` package that
-  loads and checks calibration files, and a copyable project template.
-- Doing: assembling the arms and filling in the bill of materials.
-- Next: set servo ids, calibrate both arms, first teleoperation.
+- Done: uv workspace with a shared `so101` package and a copyable project
+  template.
+- Done: the machine config loader, and LeRobot 0.6.1 pinned in `hw-setup`
+  (#38).
+- Doing: calibration checks (#19), the repo standard (#40) and the arm
+  bring-up scripts.
+- Next: an SO-101 playbook (#27).
 
 ## Pipeline
 
