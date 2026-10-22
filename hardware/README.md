@@ -8,7 +8,7 @@ that reads these files lives in `shared/so101/` or a project.
 | `calibration/` | Per-arm calibration JSON, one folder per role (`leader/`, `follower/`). |
 | `urdf/` | Robot description (URDF or MJCF) and meshes, for simulation and kinematics. |
 | `cad/` | Printed parts, mounts and camera brackets (STEP, STL, 3MF), stored with Git LFS. |
-| `bom.md` | Bill of materials. |
+| `bom.md` | Bill of materials: parts, gearing per joint, 5 V vs 12 V supplies, indicative EUR prices. |
 
 ## Calibration files
 
