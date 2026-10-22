@@ -33,7 +33,10 @@ pyserial, which does not open them. It then writes `arms.leader.port` and
 `arms.follower.port` to `configs/local.yaml` (created from
 `configs/example.yaml` if missing), keeps the other keys, and refuses to write
 a file that fails `so101.machine_config`. Comments in an existing
-`local.yaml` are not kept. Use `--config` to write somewhere else.
+`local.yaml` are not kept. With no `--config` it uses `<workspace root>/configs/local.yaml`, found by
+looking upward for `configs/example.yaml`, so it works from any subfolder.
+If an arm does not come back after the replug, plug it into the same USB
+socket: the macOS port name depends on the socket.
 
 This does not call `lerobot-find-port`: that tool blocks on `input()`,
 globs `/dev/tty*` and writes nothing, so it cannot be tested or scripted.

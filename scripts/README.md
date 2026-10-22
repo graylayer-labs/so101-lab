@@ -1,9 +1,9 @@
 # Scripts
 
-Planned setup scripts. Each one will be a thin wrapper around a LeRobot CLI
-that reads ports and arm ids from `configs/local.yaml`, so nobody has to
-retype them. None exist yet; they arrive with LeRobot, alongside the first
-project that needs it.
+Setup scripts. Each one is a thin wrapper around a LeRobot CLI that reads ports
+and arm ids from `configs/local.yaml`, so nobody has to retype them. The ones
+marked built are console scripts in `projects/hw-setup`; the rest arrive with
+the first project that needs them.
 
 | Script | Wraps | What it does |
 |---|---|---|
