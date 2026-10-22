@@ -35,3 +35,10 @@ lerobot_cache/
 # Claude Code local state
 .claude/worktrees/
 .claude/settings.local.json
+# Session state (chunk, claims ledger, kitchen, logs). Settings, skills,
+# agents and commands stay trackable.
+.claude/chunk.md
+.claude/claims-ledger.md
+.claude/kitchen
+.claude/*.log
+.claude/*.jsonl
