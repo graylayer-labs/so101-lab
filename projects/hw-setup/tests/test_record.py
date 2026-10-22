@@ -432,15 +432,17 @@ def test_missing_config_fails_with_a_hint(
     assert "so101-find-ports" in capsys.readouterr().err
 
 
-def test_default_lerobot_home_is_lerobots_own(root: Path) -> None:
-    from lerobot.utils.constants import HF_LEROBOT_HOME
+def test_default_lerobot_home_is_lerobots_own(
+    root: Path, home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # HF_LEROBOT_HOME is read from the environment when lerobot.utils.constants
+    # is first imported (L69), so the module attribute is what to patch.
+    import lerobot.utils.constants
 
+    monkeypatch.setattr(lerobot.utils.constants, "HF_LEROBOT_HOME", home)
     runner = Runner()
-    target = HF_LEROBOT_HOME.resolve() / "me" / "cube"
-    if target.exists():
-        pytest.skip(f"{target} exists on this machine")
     assert main(BASE, runner=runner, root=root) == 0
-    assert f"--dataset.root={target}" in runner.calls[0]
+    assert f"--dataset.root={home.resolve() / 'me' / 'cube'}" in runner.calls[0]
 
 
 def test_lerobot_parses_the_resume_command(root: Path, home: Path) -> None:
