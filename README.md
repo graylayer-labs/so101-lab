@@ -16,7 +16,7 @@ same version.
   template.
 - Done: the machine config loader (#35), LeRobot 0.6.1 pinned in `hw-setup`
   (#38) and calibration sanity checks (#36).
-- Doing: the repo standard (#40, #12, #37) and test coverage (#41).
+- Doing: the repo standard (#40, #12) and test coverage (#41).
 - Next: arm bring-up scripts (#11, #13-#18) and the setup runbook (#27).
 - Hardware: both arms have a first calibration (#39); parts, assembly and
   servo IDs are owner steps (#29-#31).
