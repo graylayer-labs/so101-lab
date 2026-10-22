@@ -259,7 +259,7 @@ again.
 
 ## Step 4. Calibrate both arms
 
-`so101-calibrate --role leader` and `--role follower`. Calibration makes the
+`so101-calibrate --role follower` and `--role leader`. Calibration makes the
 same physical pose read as the same numbers on both arms, which is what lets
 the follower copy the leader. The result lands in
 `hardware/calibration/<role>/<id>.json`, with `<id>` from `configs/local.yaml`.
@@ -332,8 +332,8 @@ Anything other than `c` does not just keep the file: LeRobot writes that
 file's offsets and limits to the motors ("Writing calibration file associated
 with the id main to the motors"). After a reassembly or a servo swap those
 values are stale, and pressing ENTER by mistake pushes them onto the motors.
-After a reassembly, type `c`. The script then says "Calibration file
-unchanged", removes the identical backup and exits 0.
+After a reassembly, type `c`. If you press ENTER instead, the script says
+"Calibration file unchanged", removes the identical backup and exits 0.
 
 After `c` (or with no file yet), LeRobot's prompts are, in order (quoted from
 `so_follower.py` and `so_leader.py` in lerobot 0.6.1):
