@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 so101-find-ports = "hw_setup.find_ports:main"
+so101-setup-motors = "hw_setup.setup_motors:cli"
 
 [tool.uv.sources]
 so101 = { workspace = true }
