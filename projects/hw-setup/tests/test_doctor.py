@@ -11,8 +11,9 @@ from hw_setup.doctor import LEROBOT_PIN, CameraOpener, main
 
 REPO = Path(__file__).parents[3]
 EXAMPLE = REPO / "configs" / "example.yaml"
-LEADER = "/dev/tty.usbmodem0000000001"
-FOLLOWER = "/dev/tty.usbmodem0000000002"
+LEADER = "/dev/cu.usbmodem0000000001"
+FOLLOWER = "/dev/cu.usbmodem0000000002"
+TTY = EXAMPLE.read_text().replace("/dev/cu.", "/dev/tty.")
 
 
 @pytest.fixture
@@ -131,23 +132,55 @@ def test_no_ports_at_all(root: Path, capsys: pytest.CaptureFixture[str]) -> None
     assert out.count("so101-find-ports") >= 1
 
 
-def test_macos_tty_port_warns_with_cu_name(
+def test_macos_tty_config_matches_cu_listing_and_warns(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # Real pyserial on macOS lists only cu.* names.
+    (root / "configs" / "local.yaml").write_text(TTY)
     code, out = run(root, platform="darwin", capsys=capsys)
     assert code == 0
     assert line_for(out, "ports").startswith("WARN")
-    assert "/dev/cu.usbmodem0000000001" in out
+    assert "matched" in out and LEADER in out
     assert "accepts both" in out
 
 
+def test_macos_tty_config_with_nothing_listed_fails(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (root / "configs" / "local.yaml").write_text(TTY)
+    code, out = run(root, platform="darwin", ports=[], capsys=capsys)
+    assert code == 1
+    assert line_for(out, "ports").startswith("FAIL")
+
+
 def test_macos_cu_port_passes(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    text = EXAMPLE.read_text().replace("/dev/tty.", "/dev/cu.")
-    (root / "configs" / "local.yaml").write_text(text)
-    ports = ["/dev/cu.usbmodem0000000001", "/dev/cu.usbmodem0000000002"]
-    code, out = run(root, ports=ports, platform="darwin", capsys=capsys)
+    code, out = run(root, platform="darwin", capsys=capsys)
     assert code == 0
     assert line_for(out, "ports").startswith("PASS")
+
+
+def test_skipped_checks_have_fix_lines(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (root / "configs" / "local.yaml").unlink()
+    _code, out = run(root, capsys=capsys)
+    skipped = out.split("WARN  ports:")[1]
+    assert "fix:" in skipped.split("WARN  calibration:")[0]
+    assert "fix:" in skipped.split("WARN  calibration:")[1].split("WARN  cameras:")[0]
+    assert "fix:" in skipped.split("WARN  cameras:")[1]
+
+
+def test_config_fix_names_the_given_path(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing = root / "elsewhere.yaml"
+    code, out = run(root, ["--config", str(missing)], capsys=capsys)
+    assert code == 1
+    assert f"cp configs/example.yaml {missing}" in out
+
+
+def test_camera_check_says_it_compares_counts() -> None:
+    assert "compares counts only" in Path(doctor.__file__).read_text()
 
 
 def test_bad_calibration_fails_with_command(

@@ -129,7 +129,12 @@ def check_lerobot(getter: VersionGetter) -> Result:
 
 
 def _skipped(name: str) -> Result:
-    return Result("WARN", name, "skipped: no valid machine config")
+    return Result(
+        "WARN",
+        name,
+        "skipped: no valid machine config",
+        fixes=["fix the workspace or config check above, then run so101-doctor again"],
+    )
 
 
 def check_ports(
@@ -141,18 +146,19 @@ def check_ports(
     status = "PASS"
     for role in ArmRole:
         port = config.arms[role].port
-        if port not in present:
-            status = "FAIL"
-            details.append(f"{role.value}: {port} not found")
-            continue
-        if platform_name == "darwin" and port.startswith("/dev/tty."):
-            cu = "/dev/cu." + port.removeprefix("/dev/tty.")
+        # pyserial lists only cu.* names on macOS, so match a tty.* name by its cu.*
+        cu = "/dev/cu." + port.removeprefix("/dev/tty.")
+        is_tty = platform_name == "darwin" and port.startswith("/dev/tty.")
+        if is_tty and cu in present:
             if status == "PASS":
                 status = "WARN"
             details.append(
-                f"{role.value}: {port} is a tty.* name; the cu.* name {cu} is the "
-                "usual choice on macOS (LeRobot accepts both)"
+                f"{role.value}: {port} is a tty.* name; matched {cu} in the listing. "
+                "Use the cu.* name in the config (LeRobot accepts both)"
             )
+        elif port not in present:
+            status = "FAIL"
+            details.append(f"{role.value}: {port} not found")
         else:
             details.append(f"{role.value}: {port} found")
     if status == "FAIL":
@@ -166,7 +172,7 @@ def check_ports(
     details.append("listed by pyserial: " + ", ".join(shown))
     summary = {
         "PASS": "both arm ports present",
-        "WARN": "ports present, tty.* name used",
+        "WARN": "ports present, matched by cu.* name",
         "FAIL": "an arm port is not present",
     }[status]
     return Result(status, "ports", summary, details, fixes)
@@ -194,7 +200,12 @@ def check_cameras(
     configured = len(config.cameras)
     details = [f"listed by the OS: {', '.join(found) if found else 'none'}"]
     status = "PASS"
-    summary = f"{len(found)} listed, {configured} configured"
+    summary = f"{len(found)} listed, {configured} configured (compares counts only)"
+    details.append(
+        "this compares counts only: Linux may list two /dev/video* entries per "
+        "camera, and phantom cameras (an iPhone Continuity camera) count too, so "
+        "a PASS does not prove the right cameras are there; use --open-cameras"
+    )
     fixes: list[str] = []
     if len(found) < configured:
         status = "WARN"
@@ -243,17 +254,13 @@ def run_checks(
             target = config_path or workspace / "configs" / "local.yaml"
             results.append(Result("PASS", "config", f"{target} is valid"))
         except WorkspaceError as err:
-            results.append(
-                Result(
-                    "FAIL",
-                    "config",
-                    str(err),
-                    fixes=[
-                        "so101-find-ports  (writes configs/local.yaml)",
-                        "or: cp configs/example.yaml configs/local.yaml  and edit it",
-                    ],
-                )  # fmt: skip
-            )
+            fixes = [
+                f"cp configs/example.yaml {config_path or 'configs/local.yaml'}"
+                "  and edit it"
+            ]
+            if config_path is None:
+                fixes.insert(0, "so101-find-ports  (writes configs/local.yaml)")
+            results.append(Result("FAIL", "config", str(err), fixes=fixes))
     if config is None or workspace is None:
         return [
             *results,
