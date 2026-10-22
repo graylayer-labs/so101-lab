@@ -1,0 +1,23 @@
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hw-setup"
+version = "0.1.0"
+description = "Hardware setup: find ports, set motor IDs and calibrate the SO-101 arms with LeRobot"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Eoin McAllister" }]
+dependencies = [
+    "lerobot[feetech]==0.6.1",
+    "so101",
+]
+
+[tool.uv.sources]
+so101 = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hw_setup"]
