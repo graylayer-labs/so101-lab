@@ -2,6 +2,73 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Every arm bring-up step is now one tested command, with a runbook
+
+The SO-101 arms can now be taken from the box to a first recorded dataset by
+following `docs/setup.md`. Each step is a `so101-*` command that checks what it
+can before a servo moves, and prints the exact LeRobot command with
+`--dry-run`. None of the commands has run on the real arms yet. The committed
+calibrations were made with LeRobot directly.
+
+| Claim | Number | Where |
+|---|---|---|
+| Bring-up commands on main | 6 (find-ports, setup-motors, calibrate, teleop, record, doctor) | `projects/hw-setup/` |
+| Tests on main | 268 passing (32 at the start of the shift), none need hardware | `uv run pytest` |
+| Line and branch coverage of `src/` at the coverage audit (95% on main now, after the new tools) | 93% before, 100% after | PR #46 |
+| PRs merged this shift, each with green CI and a posted review | 18 | #1, #36 to #59 |
+| CI time with LeRobot and its dataset extra | about 1 minute | PR #56 checks |
+| Real bugs caught by review before merge | 6 | below |
+
+### What was tried, and what we learned
+
+**Every wrapper builds its command from one place.** `hw_setup.lerobot_argv`
+turns the machine config into LeRobot's flags. Its tests feed each command
+through LeRobot's own config parser, so a misspelt flag fails a test instead
+of failing at the arm. Flag names were read from the LeRobot 0.6.1 source,
+not only its docs, because `--help` prints over 1,200 lines covering every
+robot type.
+
+**Review found real bugs that the tests had missed.** Each one would have hit
+the arms or the data:
+
+- A relative repo path would have made LeRobot look in the wrong folder and
+  silently start a fresh calibration (#11).
+- The calibration diff ignored servo IDs, so swapped IDs looked like "no
+  change" (#20).
+- `so101-find-ports` wrote `local.yaml` in whatever folder it was run from
+  (#13).
+- The parts list could be read as putting 12 V on the leader (#28).
+- `so101-record --resume` on a partly written dataset could pull a public
+  dataset's metadata from the Hugging Face Hub over the local copy (#17).
+- `so101-doctor` failed any Mac port written as `/dev/tty.*`, because macOS
+  lists only `/dev/cu.*` names. The test's fake port list used `tty.*`, which real pyserial never
+  returns (#18).
+
+The lesson from the last one: a fake in a test must copy what the real tool
+returns, or it hides exactly the bug it should catch.
+
+**What LeRobot does that its guide does not say.** All of these were read
+from the 0.6.1 source and are now handled or documented:
+
+- `lerobot-find-port` has no `--help` and waits for keyboard input.
+- LeRobot's camera search opens every index from 0 to 59, which triggers the
+  macOS camera prompt. The doctor lists cameras without opening them.
+- Pressing ENTER at the calibrate prompt writes the stored file to the
+  motors.
+- Recording pushes to the Hub by default and adds a timestamp to the dataset
+  name.
+- LeRobot reports SO-101 configs as `so100_*`.
+
+**Not done.** #12 stays open: the org's shared CI workflow cannot install
+every package in a uv workspace, so this repo keeps a local copy with the same
+pinned actions until graylayer-labs/.github#33 adds an `all-packages` input.
+Small follow-ups are #45, #50 and #55.
+
+### Next
+
+The owner steps #29 to #33 (parts, assembly, calibration, teleop, a first
+dataset), following `docs/setup.md`. Start with `so101-doctor`.
+
 ## 2026-10-22 · One runbook takes you from the box to the first dataset
 
 `docs/setup.md` now lists every step in order: check the parts and power
