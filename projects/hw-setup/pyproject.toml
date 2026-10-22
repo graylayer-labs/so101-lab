@@ -13,8 +13,12 @@ license = "MIT"
 authors = [{ name = "Eoin McAllister" }]
 dependencies = [
     "lerobot[feetech]==0.6.1",
+    "pyserial>=3.5",
     "so101",
 ]
+
+[project.scripts]
+so101-find-ports = "hw_setup.find_ports:main"
 
 [tool.uv.sources]
 so101 = { workspace = true }
