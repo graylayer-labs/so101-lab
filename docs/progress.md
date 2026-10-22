@@ -2,6 +2,15 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Two calibrations can be compared joint by joint
+
+`so101.diff_calibrations` compares two calibrations and lists, for each joint,
+the old value, new value and change in `id`, `homing_offset`, `range_min`,
+`range_max` and `drive_mode`, plus joints present in only one. `format_diff`
+turns the result into a readable table. Tested on the follower's real
+calibration and a slightly changed copy. No command-line tool yet; the issue
+did not ask for one.
+
 ## 2026-10-22 · LeRobot commands are built from the machine config
 
 `hw_setup.lerobot_argv` builds the `lerobot-setup-motors`,
