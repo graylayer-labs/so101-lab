@@ -12,7 +12,6 @@ license = "MIT"
 authors = [{ name = "Eoin McAllister" }]
 dependencies = [
     "pyyaml>=6.0.3",
-    "types-pyyaml>=6.0.12.20260906",
 ]
 
 [tool.hatch.build.targets.wheel]

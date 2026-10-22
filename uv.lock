@@ -14,6 +14,7 @@ dev = [
     { name = "ruff", specifier = ">=0.11" },
     { name = "so101", editable = "shared/so101" },
     { name = "ty", specifier = ">=0.0.1a16" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20260906" },
 ]
 
 [[package]]
@@ -1153,14 +1154,10 @@ version = "0.1.0"
 source = { editable = "shared/so101" }
 dependencies = [
     { name = "pyyaml" },
-    { name = "types-pyyaml" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "types-pyyaml", specifier = ">=6.0.12.20260906" },
-]
+requires-dist = [{ name = "pyyaml", specifier = ">=6.0.3" }]
 
 [[package]]
 name = "sympy"
