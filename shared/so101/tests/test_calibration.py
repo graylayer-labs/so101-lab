@@ -82,3 +82,21 @@ def test_load_calibration_rejects_missing_field(tmp_path: Path):
 def test_load_calibration_rejects_missing_file(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         load_calibration(tmp_path / "nope.json")
+
+
+def test_load_calibration_rejects_non_object_file(tmp_path: Path):
+    with pytest.raises(CalibrationError, match="JSON object of joints"):
+        load_calibration(_write(tmp_path, [1, 2, 3]))
+
+
+def test_load_calibration_rejects_non_object_joint(tmp_path: Path):
+    payload: dict[str, object] = {**_valid_payload(), "gripper": 5}
+    with pytest.raises(CalibrationError, match="gripper must be a JSON object"):
+        load_calibration(_write(tmp_path, payload))
+
+
+def test_load_calibration_rejects_boolean_as_integer(tmp_path: Path):
+    payload = _valid_payload()
+    payload["gripper"]["drive_mode"] = True
+    with pytest.raises(CalibrationError, match="gripper needs integer drive_mode"):
+        load_calibration(_write(tmp_path, payload))

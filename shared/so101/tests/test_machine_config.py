@@ -70,3 +70,32 @@ def test_wrong_type_names_the_key(tmp_path):
 def test_missing_file_is_a_clear_error(tmp_path):
     with pytest.raises(MachineConfigError, match="not found"):
         load_machine_config(tmp_path / "nope.yaml")
+
+
+def test_non_mapping_section_names_the_key(tmp_path):
+    text = GOOD.replace("leader: {id: main, port: /dev/tty.usbmodem1}", "leader: 5")
+    with pytest.raises(MachineConfigError, match=r"arms\.leader: expected a mapping"):
+        load_machine_config(write(tmp_path, text))
+
+
+def test_zero_width_is_out_of_range(tmp_path):
+    text = GOOD.replace("width: 640", "width: 0", 1)
+    with pytest.raises(
+        MachineConfigError, match=r"cameras\.front\.width: out of range"
+    ):
+        load_machine_config(write(tmp_path, text))
+
+
+def test_camera_index_zero_is_allowed(tmp_path):
+    assert load_machine_config(write(tmp_path, GOOD)).cameras["front"].index == 0
+
+
+def test_empty_arm_id_names_the_key(tmp_path):
+    text = GOOD.replace("id: main, port: /dev/ttyACM0", 'id: "", port: /dev/ttyACM0')
+    with pytest.raises(MachineConfigError, match=r"arms\.follower\.id"):
+        load_machine_config(write(tmp_path, text))
+
+
+def test_invalid_yaml_is_a_clear_error(tmp_path):
+    with pytest.raises(MachineConfigError, match="invalid YAML"):
+        load_machine_config(write(tmp_path, "arms: [unclosed"))
