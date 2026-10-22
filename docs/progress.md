@@ -2,6 +2,20 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Recording a local dataset is one command
+
+`uv run so101-record --task TEXT --repo-id USER/NAME --episodes N` runs
+`lerobot-record` with the leader driving the follower, after the same
+calibration check as `so101-teleop`. It never pushes to the Hub: it always
+passes `--dataset.push_to_hub=false`, which LeRobot otherwise defaults to
+true. It needs task text, writes to `$HF_LEROBOT_HOME/USER/NAME` unless
+`--dataset-root` says otherwise, and refuses any root inside the workspace.
+An existing root is refused unless `--resume` is given, which adds episodes
+to it. `--dry-run` prints the plan and the exact command. LeRobot's
+`dataset` extra is now installed (21 more packages in the lock), so the tests
+parse the command with LeRobot's own `RecordConfig`. Nothing was run on
+hardware.
+
 ## 2026-10-22 · Recalibrating an arm shows what changed per joint
 
 `uv run so101-calibrate --role leader|follower` runs LeRobot's calibration

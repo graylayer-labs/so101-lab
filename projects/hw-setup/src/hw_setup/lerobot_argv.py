@@ -24,7 +24,8 @@ parse every argv with LeRobot's own draccus config classes.
   scripts/lerobot_record.py L177.
 - ``--dataset.repo_id``, ``single_task``, ``root``, ``fps``,
   ``episode_time_s``, ``reset_time_s``, ``num_episodes``, ``push_to_hub``:
-  configs/dataset.py L27-43 (``DatasetRecordConfig``).
+  configs/dataset.py L27-43 (``DatasetRecordConfig``); ``--dataset.no_stamp``:
+  configs/dataset.py L76. ``--resume``: scripts/lerobot_record.py L190.
 """
 
 import shlex
@@ -128,14 +129,19 @@ def record_argv(
     reset_time_s: float | None = None,
     fps: int | None = None,
     push_to_hub: bool | None = None,
+    no_stamp: bool = False,
+    cameras: bool = True,
     display_data: bool = False,
+    resume: bool = False,
 ) -> list[str]:
     """``lerobot-record`` with the given dataset options.
 
     Options left as None are not passed, so LeRobot's defaults apply (note
-    that LeRobot pushes to the Hub by default). No safety rules are applied.
+    that LeRobot pushes to the Hub by default). ``no_stamp`` stops LeRobot
+    appending a date-time tag to ``repo_id`` on a new dataset. No safety
+    rules are applied.
     """
-    argv = ["lerobot-record", *_pair_args(config, repo_root, cameras=True)]
+    argv = ["lerobot-record", *_pair_args(config, repo_root, cameras)]
     argv += [
         f"--dataset.repo_id={repo_id}",
         f"--dataset.single_task={single_task}",
@@ -150,8 +156,12 @@ def record_argv(
     argv += [f"--dataset.{k}={v}" for k, v in optional.items() if v is not None]
     if push_to_hub is not None:
         argv.append(f"--dataset.push_to_hub={str(push_to_hub).lower()}")
+    if no_stamp:
+        argv.append("--dataset.no_stamp=true")
     if display_data:
         argv.append("--display_data=true")
+    if resume:
+        argv.append("--resume=true")
     return argv
 
 

@@ -12,7 +12,7 @@ requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Eoin McAllister" }]
 dependencies = [
-    "lerobot[feetech]==0.6.1",
+    "lerobot[dataset,feetech]==0.6.1",
     "pyserial>=3.5",
     "so101",
 ]
@@ -22,6 +22,7 @@ so101-calibrate = "hw_setup.calibrate:cli"
 so101-find-ports = "hw_setup.find_ports:main"
 so101-setup-motors = "hw_setup.setup_motors:cli"
 so101-teleop = "hw_setup.teleop:cli"
+so101-record = "hw_setup.record:cli"
 
 [tool.uv.sources]
 so101 = { workspace = true }
