@@ -18,19 +18,27 @@ calibration gate runs first, also under ``--dry-run``. Then:
   ``mkdir(exist_ok=False)`` (datasets/dataset_metadata.py L832) and fails on
   any existing folder. An existing root is refused here with a hint to pass
   ``--resume``.
-- ``--resume`` needs ``<root>/meta/info.json``. LeRobot's resume needs an
-  explicit root (datasets/lerobot_dataset.py L854-859) and, when the local
-  metadata is missing, downloads ``meta/`` from the Hub instead
-  (datasets/dataset_metadata.py L134-148); that case is refused here.
-  ``--episodes`` then counts the episodes to add (scripts/lerobot_record.py
-  L470-471).
+- ``--resume`` needs the local metadata. LeRobot's resume needs an explicit
+  root (datasets/lerobot_dataset.py L854-859) and, if ``_load_metadata``
+  raises ``FileNotFoundError`` or ``NotADirectoryError``, downloads ``meta/``
+  for the repo_id from the Hub (datasets/dataset_metadata.py L134-148), which
+  could replace local metadata with a public dataset of the same name.
+  ``missing_metadata`` mirrors what ``_load_metadata`` (L214-219) reads; any
+  gap is refused here. ``--episodes`` then counts the episodes to add
+  (scripts/lerobot_record.py L470-471).
+- A root that exists with incomplete metadata (say, after a crash) can be
+  neither created nor resumed. It is named as such, with an ``mv`` command to
+  set it aside; nothing is deleted.
 """
 
 import argparse
+import json
 import re
+import shlex
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
+from datetime import datetime
 from pathlib import Path
 
 from hw_setup.lerobot_argv import format_command, record_argv
@@ -39,6 +47,8 @@ from hw_setup.workspace import WorkspaceError, find_workspace_root, load_local_c
 
 PROG = "so101-record"
 INFO_FILE = Path("meta") / "info.json"
+TASKS_FILE = Path("meta") / "tasks.parquet"
+EPISODES_DIR = Path("meta") / "episodes"
 _REPO_ID = re.compile(r"[^/\s]+/[^/\s]+")
 
 Runner = Callable[[list[str]], int]
@@ -136,6 +146,40 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def missing_metadata(dataset_root: Path) -> list[str]:
+    """The metadata files LeRobot needs to load a local dataset, if missing.
+
+    Mirrors ``LeRobotDatasetMetadata._load_metadata`` (lerobot 0.6.1,
+    datasets/dataset_metadata.py L214-219): ``meta/info.json`` always,
+    ``meta/tasks.parquet`` when info counts tasks, and at least one
+    ``meta/episodes/*/*.parquet`` when it counts episodes
+    (datasets/io_utils.py L75-77). ``meta/stats.json`` is optional (L172).
+    An unreadable info.json also counts: nothing else can be checked.
+    """
+    info_path = dataset_root / INFO_FILE
+    if not info_path.is_file():
+        return [str(INFO_FILE)]
+    try:
+        info = json.loads(info_path.read_text())
+        total_tasks = int(info.get("total_tasks", 0))
+        total_episodes = int(info.get("total_episodes", 0))
+    except (OSError, ValueError, TypeError, AttributeError) as err:
+        return [f"{INFO_FILE} (unreadable: {err})"]
+    missing = []
+    if total_tasks > 0 and not (dataset_root / TASKS_FILE).is_file():
+        missing.append(str(TASKS_FILE))
+    episodes = dataset_root / EPISODES_DIR
+    if total_episodes > 0 and not any(episodes.glob("*/*.parquet")):
+        missing.append(f"{EPISODES_DIR}/*/*.parquet")
+    return missing
+
+
+def set_aside_command(dataset_root: Path, now: datetime | None = None) -> str:
+    stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
+    aside = dataset_root.with_name(f"{dataset_root.name}.broken-{stamp}")
+    return shlex.join(["mv", str(dataset_root), str(aside)])
+
+
 def dataset_root_problem(dataset_root: Path, workspace: Path, resume: bool) -> str:
     """Why ``dataset_root`` (already resolved) cannot be used, or ''."""
     if dataset_root.is_relative_to(workspace.resolve()):
@@ -143,12 +187,22 @@ def dataset_root_problem(dataset_root: Path, workspace: Path, resume: bool) -> s
             f"dataset root {dataset_root} is inside the workspace "
             f"{workspace.resolve()}; pass --dataset-root outside it"
         )
-    if resume and not (dataset_root / INFO_FILE).is_file():
+    if not dataset_root.exists():
+        if resume:
+            return (
+                f"nothing to resume: {dataset_root} does not exist. "
+                "Drop --resume to start a new dataset."
+            )
+        return ""
+    missing = missing_metadata(dataset_root)
+    if missing:
         return (
-            f"nothing to resume: no {INFO_FILE} under {dataset_root}. "
-            "Drop --resume to start a new dataset."
+            f"{dataset_root} holds an incomplete dataset (missing: "
+            f"{', '.join(missing)}). LeRobot can neither create a dataset there "
+            "nor resume it without fetching metadata from the Hub. Set it aside "
+            f"and start again:\n  {set_aside_command(dataset_root)}"
         )
-    if not resume and dataset_root.exists():
+    if not resume:
         return (
             f"dataset root {dataset_root} already exists. Pass --resume to add "
             "episodes to it, or choose another --repo-id or --dataset-root."

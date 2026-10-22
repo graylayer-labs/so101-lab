@@ -1,13 +1,20 @@
 """Tests for so101-record. Tmp workspaces and dataset folders; no hardware."""
 
 import json
+import re
 import shutil
 from pathlib import Path
 
+import datasets
+import pandas as pd
 import pytest
+from lerobot.datasets.dataset_metadata import CODEBASE_VERSION, LeRobotDatasetMetadata
+from lerobot.datasets.feature_utils import create_empty_dataset_info
+from lerobot.datasets.io_utils import write_episodes, write_info, write_tasks
+from lerobot.utils.constants import DEFAULT_FEATURES
 
 from hw_setup.lerobot_argv import format_command, record_argv
-from hw_setup.record import main
+from hw_setup.record import main, missing_metadata
 from so101.machine_config import load_machine_config
 
 REPO = Path(__file__).parents[3]
@@ -62,10 +69,48 @@ def expected(root: Path, dataset_root: Path, **kwargs: object) -> list[str]:
     return record_argv(config, root.resolve(), **options)
 
 
-def make_dataset(path: Path) -> Path:
-    (path / "meta").mkdir(parents=True)
-    (path / "meta" / "info.json").write_text("{}")
+def make_dataset(path: Path, episodes: int = 1) -> Path:
+    """Real LeRobot v3.0 metadata, written with LeRobot's own writers."""
+    path.mkdir(parents=True)
+    info = create_empty_dataset_info(
+        CODEBASE_VERSION, 30, dict(DEFAULT_FEATURES), False, "so_follower"
+    )
+    info.total_episodes = episodes
+    info.total_tasks = 1 if episodes else 0
+    write_info(info, path)
+    if episodes:
+        write_tasks(pd.DataFrame({"task_index": [0]}, index=pd.Index(["Pick"])), path)
+        rows = {"episode_index": list(range(episodes))}
+        write_episodes(datasets.Dataset.from_dict(rows), path)
     return path
+
+
+def lerobot_falls_back_to_the_hub(path: Path) -> bool:
+    """Whether LeRobot's _load_metadata raises the errors that make it pull
+    meta/ from the Hub (datasets/dataset_metadata.py L134-148). It only reads
+    local files: no network."""
+    meta = LeRobotDatasetMetadata.__new__(LeRobotDatasetMetadata)
+    meta.repo_id, meta.root, meta._requested_root = "me/cube", path, path
+    try:
+        meta._load_metadata()
+    except (FileNotFoundError, NotADirectoryError):
+        return True
+    return False
+
+
+def break_dataset(path: Path, part: str) -> None:
+    if part == "info":
+        (path / "meta" / "info.json").unlink()
+    elif part == "tasks":
+        (path / "meta" / "tasks.parquet").unlink()
+    elif part == "episodes":
+        shutil.rmtree(path / "meta" / "episodes")
+    elif part == "episodes-empty":
+        shutil.rmtree(path / "meta" / "episodes")
+        (path / "meta" / "episodes" / "chunk-000").mkdir(parents=True)
+    elif part == "meta-is-a-file":
+        shutil.rmtree(path / "meta")
+        (path / "meta").write_text("")
 
 
 def test_default_run(root: Path, home: Path) -> None:
@@ -219,6 +264,64 @@ def test_existing_empty_folder_without_resume_is_refused(
     assert runner.calls == []
 
 
+PARTS = ["info", "tasks", "episodes", "episodes-empty", "meta-is-a-file"]
+
+
+@pytest.mark.parametrize("part", [None, *PARTS])
+def test_metadata_check_mirrors_lerobots_hub_fallback(
+    home: Path, part: str | None
+) -> None:
+    target = make_dataset(home / "me" / "cube")
+    if part:
+        break_dataset(target, part)
+    assert bool(missing_metadata(target)) == lerobot_falls_back_to_the_hub(target)
+    assert bool(part) == lerobot_falls_back_to_the_hub(target)
+
+
+def test_a_dataset_with_no_episodes_yet_is_complete(home: Path) -> None:
+    # What a crash during the first episode leaves: info.json only.
+    target = make_dataset(home / "me" / "cube", episodes=0)
+    assert missing_metadata(target) == []
+    assert not lerobot_falls_back_to_the_hub(target)
+
+
+def test_unreadable_info_counts_as_incomplete(home: Path) -> None:
+    target = make_dataset(home / "me" / "cube")
+    (target / "meta" / "info.json").write_text("{not json")
+    assert missing_metadata(target) != []
+
+
+@pytest.mark.parametrize("resume", [False, True])
+@pytest.mark.parametrize("part", PARTS)
+def test_incomplete_dataset_names_the_state_and_how_to_set_it_aside(
+    root: Path,
+    home: Path,
+    part: str,
+    resume: bool,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = make_dataset(home / "me" / "cube")
+    break_dataset(target, part)
+    runner = Runner()
+    args = [*BASE, "--resume"] if resume else BASE
+    assert run(args, root, home, runner) == 1
+    assert runner.calls == []
+    err = capsys.readouterr().err
+    assert "incomplete dataset" in err
+    resolved = re.escape(str(target.resolve()))
+    assert re.search(rf"mv {resolved} {resolved}\.broken-\d{{8}}-\d{{6}}", err)
+    assert "Drop --resume" not in err and "Pass --resume" not in err
+    assert target.exists()
+
+
+def test_empty_folder_is_an_incomplete_dataset(
+    root: Path, home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (home / "me" / "cube").mkdir(parents=True)
+    assert run([*BASE, "--resume"], root, home) == 1
+    assert "incomplete dataset" in capsys.readouterr().err
+
+
 def test_resume_on_an_existing_dataset(root: Path, home: Path) -> None:
     target = make_dataset(home / "me" / "cube")
     runner = Runner()
@@ -226,13 +329,10 @@ def test_resume_on_an_existing_dataset(root: Path, home: Path) -> None:
     assert runner.calls == [expected(root, target.resolve(), resume=True)]
 
 
-@pytest.mark.parametrize("make", [False, True])
 def test_resume_without_a_local_dataset_is_refused(
-    root: Path, home: Path, make: bool, capsys: pytest.CaptureFixture[str]
+    root: Path, home: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # LeRobot would fall back to downloading meta/ from the Hub.
-    if make:
-        (home / "me" / "cube").mkdir(parents=True)
     runner = Runner()
     assert run([*BASE, "--resume"], root, home, runner) == 1
     assert runner.calls == []
