@@ -13,6 +13,7 @@ license = "MIT"
 authors = [{ name = "Eoin McAllister" }]
 dependencies = [
     "lerobot[feetech]==0.6.1",
+    "pyserial>=3.5",
     "so101",
 ]
 

@@ -582,12 +582,14 @@ version = "0.1.0"
 source = { editable = "projects/hw-setup" }
 dependencies = [
     { name = "lerobot", extra = ["feetech"] },
+    { name = "pyserial" },
     { name = "so101" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "lerobot", extras = ["feetech"], specifier = "==0.6.1" },
+    { name = "pyserial", specifier = ">=3.5" },
     { name = "so101", editable = "shared/so101" },
 ]
 
