@@ -34,6 +34,7 @@ leader + follower arms).
 ```bash
 uv sync --dev --all-packages
 uv run pytest
+uv run pytest --cov   # line and branch coverage per module
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check

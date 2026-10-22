@@ -2,6 +2,14 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Every source module has tests, 100% covered
+
+Coverage rose from 93% to 100% (line and branch) across `so101` and
+`hw-setup`; run it with `uv run pytest --cov`. The calibration checks now
+have edge tests: gripper width 300 and 2500 pass, 250 and 3000 fail, and a
+range of exactly 200 passes. A test also checks the installed LeRobot is
+0.6.1. Nothing was run on hardware.
+
 ## 2026-10-22 · First arm calibrations are committed, and checked in CI
 
 The owner's initial calibrations of the leader and follower arms are now in
