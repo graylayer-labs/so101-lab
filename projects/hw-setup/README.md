@@ -18,6 +18,8 @@ any import or install error.
   built from the machine config (`hw_setup.lerobot_argv`).
 - Done: `so101-setup-motors` (guided motor setup, `--dry-run`).
 - Done: `so101-teleop` (calibration-gated teleoperation, `--dry-run`).
+- Done: `so101-record` (local datasets only, resume, `--dry-run`);
+  `lerobot[feetech,dataset]` installed.
 - Doing: nothing.
 - Done: `so101-find-ports` (tested with fakes; not yet run on hardware).
 - Done: `so101-calibrate` (tested with fakes; not yet run on hardware).
@@ -102,15 +104,16 @@ print(format_command(calibrate_argv(config, ArmRole.LEADER, repo.resolve())))
 - `teleoperate_argv` and `record_argv` use both arms and the cameras.
   `record_argv` takes the dataset `repo_id`, `single_task` and
   `num_episodes`, plus optional `dataset_root`, `episode_time_s`,
-  `reset_time_s`, `fps` and `push_to_hub`. Options left out use LeRobot's
-  defaults, and LeRobot pushes to the Hub by default.
+  `reset_time_s`, `fps`, `push_to_hub`, `no_stamp`, `cameras`,
+  `display_data` and `resume`. Options left out use LeRobot's defaults, and
+  LeRobot pushes to the Hub by default.
 - The follower goes to `--robot.*`, the leader to `--teleop.*`.
   `calibration_dir` points at `hardware/calibration/<role>`, where LeRobot
   reads `<id>.json`.
 - The flag names were checked against lerobot 0.6.1; the module docstring
   lists the source file and line of each.
-- `lerobot-record` needs `lerobot[dataset]`, which is not installed yet:
-  the record command can be built and printed but not run.
+- The tests parse every argv with LeRobot's own config classes, including
+  `RecordConfig` (`lerobot-record` needs the `dataset` extra, now installed).
 
 ## Set the motor IDs
 
@@ -144,6 +147,40 @@ Then it runs `lerobot-teleoperate` (or, with `--dry-run`, prints the exact
 command and exits 0). Cameras are on by default; `--config PATH` overrides
 `configs/local.yaml` in the workspace root, which has no fallback to the
 example.
+
+## Record a dataset
+
+```bash
+uv run so101-record --task "Pick up the red cube" --repo-id me/cube \
+    --episodes 10 --dry-run              # check everything, print the command
+uv run so101-record --task "Pick up the red cube" --repo-id me/cube \
+    --episodes 10                        # record 10 episodes
+uv run so101-record --task "Pick up the red cube" --repo-id me/cube \
+    --episodes 5 --resume                # add 5 more after an interruption
+```
+
+The leader drives the follower as in `so101-teleop`, and the same calibration
+check runs first, also with `--dry-run`. Then:
+
+- The dataset stays local: `--dataset.push_to_hub=false` is always passed
+  (LeRobot defaults to pushing) and there is no flag to change it.
+- `--task` must have text; empty or whitespace-only is refused.
+  `--repo-id` must be `USER/NAME`; `--episodes` must be 1 or more.
+- The dataset is written to `--dataset-root`, or by default to LeRobot's own
+  `$HF_LEROBOT_HOME/USER/NAME` (`~/.cache/huggingface/lerobot/USER/NAME`
+  unless set). The path is resolved and printed, and refused if it is inside
+  the workspace.
+- `--dataset.no_stamp=true` is always passed, so LeRobot keeps the name as
+  given instead of adding a date-time tag; the printed root is where the data
+  goes.
+- An existing dataset root is refused unless you pass `--resume`: LeRobot
+  cannot create a dataset in an existing folder. `--resume` needs
+  `meta/info.json` under the root, and `--episodes` then counts the episodes
+  to add. Without local metadata it refuses, because LeRobot would try to
+  download it from the Hub.
+- `--episode-time-s`, `--reset-time-s` and `--fps` are passed only when
+  given (LeRobot's defaults: 60 s, 60 s, 30 fps). `--no-cameras`,
+  `--display` and `--config PATH` work as in `so101-teleop`.
 
 ## Layout
 
