@@ -42,3 +42,4 @@ lerobot_cache/
 .claude/kitchen
 .claude/*.log
 .claude/*.jsonl
+.coverage

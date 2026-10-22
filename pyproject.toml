@@ -16,6 +16,7 @@ dev = [
     "ty>=0.0.1a16",
     # Type stubs for so101's pyyaml; only needed for ty, not at runtime.
     "types-pyyaml>=6.0.12.20260906",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.pytest.ini_options]
@@ -38,3 +39,7 @@ python-version = "3.12"
 [tool.ty.src]
 # The template is copied, not installed, so its imports cannot resolve here.
 exclude = ["projects/_template"]
+
+[tool.coverage.run]
+branch = true
+source = ["shared/so101/src", "projects/hw-setup/src"]
