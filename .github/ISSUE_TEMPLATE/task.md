@@ -9,20 +9,21 @@ about: A unit of work an agent can pick up with no prior context
      issue. Say which part it touches: projects/<name>, shared/ or
      hardware/. Assume the reader has not seen any conversation. -->
 
-## Task
+## What someone will see when this is done
 
-<!-- What to do. Name the files or modules involved where known. -->
+<!-- One or two sentences a reader can check: a command that works, a file
+     that exists, a line in the README. -->
 
-## Acceptance criteria
+## Done when
 
 <!-- State the property to guarantee, not only the thing to build. -->
 
 - [ ] ...
 
-## Out of scope
+## Notes
 
-<!-- What not to touch, so the change stays small. -->
+<!-- Add the issue to board 12, "SO-101 lab" (graylayer-labs Projects). -->
 
-## Suggested model
-
-<!-- fable | opus | sonnet | haiku, and one line on why. -->
+- Size: S | M | L
+- Depends on: #...
+- Links: ...
