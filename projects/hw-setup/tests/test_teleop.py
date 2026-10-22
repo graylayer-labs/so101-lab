@@ -166,7 +166,7 @@ def test_explicit_config_path(
     other.write_text(EXAMPLE.read_text().replace("usbmodem0000000001", "usbmodemZZZ"))
     runner = Runner()
     assert main(["--config", str(other)], runner=runner, root=root) == 0
-    assert "--teleop.port=/dev/tty.usbmodemZZZ" in runner.calls[0]
+    assert "--teleop.port=/dev/cu.usbmodemZZZ" in runner.calls[0]
 
 
 def test_missing_config_fails_with_a_hint(

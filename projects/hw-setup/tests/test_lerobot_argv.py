@@ -35,13 +35,13 @@ ROOT = REPO.resolve()
 
 FOLLOWER = [
     "--robot.type=so101_follower",
-    "--robot.port=/dev/tty.usbmodem0000000002",
+    "--robot.port=/dev/cu.usbmodem0000000002",
     "--robot.id=main",
     f"--robot.calibration_dir={ROOT}/hardware/calibration/follower",
 ]
 LEADER = [
     "--teleop.type=so101_leader",
-    "--teleop.port=/dev/tty.usbmodem0000000001",
+    "--teleop.port=/dev/cu.usbmodem0000000001",
     "--teleop.id=main",
     f"--teleop.calibration_dir={ROOT}/hardware/calibration/leader",
 ]
@@ -196,9 +196,9 @@ def test_lerobot_parses_teleoperate():
     cfg = parse(TeleoperateConfig, teleoperate_argv(CONFIG, ROOT, display_data=True))
     # so101_* and so100_* name the same classes; `.type` reports so100_*.
     assert isinstance(cfg.robot, SOFollowerRobotConfig)
-    assert cfg.robot.port == "/dev/tty.usbmodem0000000002"
+    assert cfg.robot.port == "/dev/cu.usbmodem0000000002"
     assert isinstance(cfg.teleop, SOLeaderTeleopConfig)
-    assert cfg.teleop.port == "/dev/tty.usbmodem0000000001"
+    assert cfg.teleop.port == "/dev/cu.usbmodem0000000001"
     assert cfg.display_data is True
     front = cfg.robot.cameras["front"]
     assert front.type == "opencv"

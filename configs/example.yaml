@@ -1,15 +1,15 @@
 # Copy to configs/local.yaml (gitignored) and edit for this machine.
 # Fill in the ports with `uv run so101-find-ports` (it writes configs/local.yaml;
-# on macOS pyserial names ports /dev/cu.usbmodem*, which LeRobot accepts too).
-# Find cameras with `lerobot-find-cameras`.
+# pyserial lists macOS ports as /dev/cu.usbmodem*; LeRobot accepts tty.* too).
+# Check cameras with `uv run so101-doctor` (lerobot-find-cameras opens every index).
 
 arms:
   leader:
     id: main                         # matches hardware/calibration/leader/main.json
-    port: /dev/tty.usbmodem0000000001
+    port: /dev/cu.usbmodem0000000001
   follower:
     id: main                         # matches hardware/calibration/follower/main.json
-    port: /dev/tty.usbmodem0000000002
+    port: /dev/cu.usbmodem0000000002
 
 cameras:
   front:

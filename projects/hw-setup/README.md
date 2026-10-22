@@ -23,6 +23,7 @@ any import or install error.
 - Doing: nothing.
 - Done: `so101-find-ports` (tested with fakes; not yet run on hardware).
 - Done: `so101-calibrate` (tested with fakes; not yet run on hardware).
+- Done: `so101-doctor` (read-only preflight, tested with fakes).
 - Next: set motor IDs (needs hardware).
 
 ## Find the ports
@@ -80,6 +81,59 @@ It runs `lerobot-calibrate` for one arm (`--role leader` or `follower`) with
   the new values, and the checks may be wrong for your arm. After a restore,
   LeRobot notices the file and motors differ on the next connect and asks to
   write the file to the motors.
+
+## Check the setup
+
+```bash
+uv run so101-doctor                     # report only; works with no arm attached
+uv run so101-doctor --open-cameras      # also open each configured camera
+uv run so101-doctor --config PATH       # default: configs/local.yaml
+```
+
+Each check prints PASS, WARN or FAIL on one line, and a `fix:` line for every
+WARN and FAIL. Exit 0 when nothing FAILs, otherwise 1. It opens no serial
+port, runs no LeRobot command and writes nothing.
+
+- Python >= 3.12, and the installed `lerobot` equals the pin (0.6.1), read
+  with `importlib.metadata`.
+- Workspace root found; the machine config exists and validates.
+- Each `arms.<role>.port` is in the pyserial listing. pyserial lists only
+  `/dev/cu.*` names on macOS, so a configured `/dev/tty.*` name is matched by
+  its `cu.*` twin and gets a WARN to switch to the `cu.*` name (LeRobot accepts
+  both).
+- Calibrations pass `calibration_problems`; each problem is printed with its
+  `so101-calibrate --role <role>` command.
+- Cameras are listed without being opened (macOS `system_profiler`, Linux
+  `/dev/video*`). LeRobot's `lerobot-find-cameras` opens every index with
+  `cv2.VideoCapture`, so it is not used. With `--open-cameras` each configured
+  index is opened and one frame is read; on macOS a failure prints the camera
+  permission hint (System Settings > Privacy & Security > Camera). The default
+  check compares counts only: Linux may list two `/dev/video*` entries per
+  camera, and phantom cameras such as an iPhone Continuity camera count, so a
+  PASS there does not prove the right cameras are present.
+
+Example output from one machine (a MacBook with no arms attached, run with
+`--config configs/example.yaml`; `<root>` stands for the workspace path). Your
+lines will differ:
+
+```text
+PASS  python: 3.12.12
+PASS  lerobot: 0.6.1 (pinned)
+PASS  workspace: <root>
+PASS  config: configs/example.yaml is valid
+FAIL  ports: an arm port is not present
+        leader: /dev/cu.usbmodem0000000001 not found
+        follower: /dev/cu.usbmodem0000000002 not found
+        listed by pyserial: /dev/cu.Bluetooth-Incoming-Port, /dev/cu.debug-console
+        fix: plug in both arms and run: so101-find-ports  (or fix arms.<role>.port in configs/local.yaml)
+PASS  calibration: leader and follower pass the checks
+PASS  cameras: 2 listed, 2 configured (compares counts only)
+        listed by the OS: MacBook Pro Camera, Eoin’s iPhone Camera
+        this compares counts only: Linux may list two /dev/video* entries per camera, and phantom cameras (an iPhone Continuity camera) count too, so a PASS does not prove the right cameras are there; use --open-cameras
+        not opened; add --open-cameras to open each configured index
+
+1 failed: ports
+```
 
 ## LeRobot commands
 
