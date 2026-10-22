@@ -34,6 +34,7 @@ hold the new values, and the checks are heuristics the owner may overrule.
 """
 
 import argparse
+import os
 import shlex
 import shutil
 import subprocess
@@ -82,13 +83,57 @@ def _load(path: Path) -> tuple[dict[str, JointCalibration] | None, str]:
     """The calibration at ``path``, or None and the reason it cannot load."""
     try:
         return load_calibration(path), ""
-    except (CalibrationError, ValueError) as err:
+    except (CalibrationError, ValueError, OSError) as err:
         return None, str(err)
 
 
-def _refuse_corrupt(target: Path, backup: Path, reason: str) -> int:
-    _err(f"{PROG}: the existing calibration file is unreadable: {reason}")
-    _err("LeRobot would crash loading it before it asks anything.")
+def lerobot_can_load(path: Path) -> bool:
+    """Whether LeRobot's own loader reads ``path`` (robots/robot.py L159-160).
+
+    It only needs JSON objects with the five integer motor keys; so101's
+    checks (all six joints, range order) are stricter.
+    """
+    import draccus
+    from lerobot.motors.motors_bus import MotorCalibration
+
+    # draccus annotates ``load`` for dataclasses only, but LeRobot passes this
+    # exact dict type (robots/robot.py L160) and it works at runtime.
+    calibration_type = dict[str, MotorCalibration]
+    try:
+        with path.open() as f, draccus.config_type("json"):
+            draccus.load(calibration_type, f)  # ty: ignore[invalid-argument-type]
+    except Exception:  # draccus raises several unrelated types on bad input
+        return False
+    return True
+
+
+def copy_new(src: Path, dst: Path) -> None:
+    """Copy ``src`` to ``dst``; FileExistsError if ``dst`` exists."""
+    with src.open("rb") as fin, dst.open("xb") as fout:
+        try:
+            shutil.copyfileobj(fin, fout)
+        except BaseException:
+            dst.unlink()
+            raise
+    shutil.copystat(src, dst)
+
+
+def move_new(src: Path, dst: Path) -> None:
+    """Move ``src`` to ``dst``; FileExistsError if ``dst`` exists."""
+    os.link(src, dst)
+    src.unlink()
+
+
+def _label(crash: bool) -> str:
+    return "unreadable" if crash else "invalid"
+
+
+def _refuse_corrupt(target: Path, backup: Path, reason: str, crash: bool) -> int:
+    _err(f"{PROG}: the existing calibration file is {_label(crash)}: {reason}")
+    if crash:
+        _err("LeRobot would crash loading it before it asks anything.")
+    else:
+        _err("It fails the sanity checks, so it is no base to recalibrate from.")
     _err("Move it aside, then run again:")
     _err(f"  {shlex.join(['mkdir', '-p', str(backup.parent)])}")
     _err(f"  {shlex.join(['mv', str(target), str(backup)])}")
@@ -177,16 +222,17 @@ def main(
     backup = backup_path(target, now()) if target.exists() else None
     old, reason = _load(target) if backup is not None else (None, "")
     corrupt = backup is not None and old is None
+    crash = corrupt and not lerobot_can_load(target)
     if backup is not None and corrupt and not args.move_corrupt:
-        return _refuse_corrupt(target, backup, reason)
+        return _refuse_corrupt(target, backup, reason, crash)
     if backup is not None and backup.exists():
         _err(f"{PROG}: backup {backup} already exists; not overwriting it")
         return 1
 
     if corrupt:
-        print(f"Calibration file: {target} (unreadable: {reason})")
+        print(f"Calibration file: {target} ({_label(crash)}: {reason})")
         verb = "would move" if args.dry_run else "moving"
-        print(f"Backup: {verb} the unreadable file to {backup}")
+        print(f"Backup: {verb} the {_label(crash)} file to {backup}")
         print(f"Command: {format_command(command)}")
         print("LeRobot then finds no file and goes straight to calibration.")
     else:
@@ -196,12 +242,22 @@ def main(
         return 0
 
     if backup is not None:
-        backup.parent.mkdir(exist_ok=True)
+        try:
+            backup.parent.mkdir(exist_ok=True)
+            if corrupt:
+                move_new(target, backup)
+            else:
+                copy_new(target, backup)
+        except FileExistsError:
+            _err(f"{PROG}: backup {backup} already exists; not overwriting it")
+            return 1
+        except OSError as err:
+            action = "move" if corrupt else "back up"
+            _err(f"{PROG}: cannot {action} {target} to {backup}: {err}")
+            return 1
         if corrupt:
-            target.replace(backup)
-            print(f"Moved the unreadable {target} to {backup}")
+            print(f"Moved the {_label(crash)} {target} to {backup}")
         else:
-            shutil.copy2(target, backup)
             print(f"Backed up {target} to {backup}")
 
     # A moved-aside unreadable file is not worth restoring.

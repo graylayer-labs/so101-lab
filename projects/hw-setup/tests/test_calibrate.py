@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from hw_setup.calibrate import backup_path, main
+from hw_setup.calibrate import backup_path, copy_new, main, move_new
 from hw_setup.lerobot_argv import calibrate_argv, format_command
 from so101.arm import ArmRole
 from so101.machine_config import load_machine_config
@@ -225,15 +225,27 @@ def test_ctrl_c_on_first_calibration_exits_130(root, capsys) -> None:
     assert "interrupted" in capsys.readouterr().err
 
 
-CORRUPT = ["{not json", "{}"]
+GOOD_JOINT = '"id": 6, "drive_mode": 0, "homing_offset": 1'
+# (file text, whether LeRobot's own loader crashes on it). Checked against
+# draccus.load(dict[str, MotorCalibration]) as in robots/robot.py L159-160.
+CORRUPT = {
+    "bad-json": ("{not json", True),
+    "not-motor-entries": ('{"gripper": 3}', True),
+    "missing-motor-key": ('{"gripper": {' + GOOD_JOINT + ', "range_min": 1}}', True),
+    "no-joints": ("{}", False),
+    "range-inverted": (
+        '{"gripper": {' + GOOD_JOINT + ', "range_min": 9, "range_max": 5}}',
+        False,
+    ),
+}
 
 
-@pytest.mark.parametrize("text", CORRUPT, ids=["bad-json", "no-joints"])
+@pytest.mark.parametrize("case", CORRUPT.values(), ids=CORRUPT.keys())
 @pytest.mark.parametrize("dry", [False, True], ids=["run", "dry-run"])
-def test_unreadable_previous_file_is_refused_before_lerobot(
-    root, capsys, text: str, dry: bool
+def test_unusable_previous_file_is_refused_before_lerobot(
+    root, capsys, case: tuple[str, bool], dry: bool
 ) -> None:
-    # LeRobot itself crashes loading it (robots/robot.py L56) before asking.
+    text, lerobot_crashes = case
     old = target(root)
     old.write_text(text)
     runner = FakeLeRobot(old, "follower_recalibrated.json")
@@ -243,10 +255,72 @@ def test_unreadable_previous_file_is_refused_before_lerobot(
     assert runner.calls == []
     assert old.read_text() == text
     assert not (old.parent / "backups").exists()
-    assert "unreadable" in err
     assert f"mkdir -p {old.parent / 'backups'}" in err
     assert f"mv {old} {backup_path(old, NOW)}" in err
     assert "--move-corrupt" in err
+    assert ("LeRobot would crash loading it" in err) is lerobot_crashes
+    assert ("fails the sanity checks" in err) is not lerobot_crashes
+
+
+def test_unreadable_permissions_are_refused_without_a_traceback(root, capsys) -> None:
+    old = install(root, "follower_main.json")
+    old.chmod(0)
+    try:
+        runner = FakeLeRobot(old, None)
+        assert run(root, runner, "--role", "follower") == 1
+    finally:
+        old.chmod(0o644)
+    err = capsys.readouterr().err
+    assert "unreadable" in err and "LeRobot would crash" in err
+    assert runner.calls == []
+
+
+def test_a_directory_in_place_of_the_file_is_refused(root, capsys) -> None:
+    old = target(root)
+    old.mkdir()
+    runner = FakeLeRobot(old, None)
+    assert run(root, runner, "--role", "follower") == 1
+    assert "unreadable" in capsys.readouterr().err
+    assert runner.calls == []
+
+
+def test_move_corrupt_that_cannot_move_is_an_error(root, capsys) -> None:
+    old = target(root)
+    old.mkdir()  # hard links to a directory are not allowed
+    runner = FakeLeRobot(old, None)
+    assert run(root, runner, "--role", "follower", "--move-corrupt") == 1
+    assert "cannot move" in capsys.readouterr().err
+    assert runner.calls == []
+    assert old.is_dir()
+
+
+def test_copy_new_never_overwrites(tmp_path: Path) -> None:
+    src, dst = tmp_path / "a", tmp_path / "b"
+    src.write_text("new")
+    dst.write_text("earlier")
+    with pytest.raises(FileExistsError):
+        copy_new(src, dst)
+    assert dst.read_text() == "earlier"
+
+
+def test_move_new_never_overwrites(tmp_path: Path) -> None:
+    src, dst = tmp_path / "a", tmp_path / "b"
+    src.write_text("new")
+    dst.write_text("earlier")
+    with pytest.raises(FileExistsError):
+        move_new(src, dst)
+    assert dst.read_text() == "earlier"
+    assert src.read_text() == "new"
+
+
+def test_copy_and_move_new_write_the_file(tmp_path: Path) -> None:
+    src = tmp_path / "a"
+    src.write_text("data")
+    copy_new(src, tmp_path / "copy")
+    move_new(src, tmp_path / "moved")
+    assert (tmp_path / "copy").read_text() == "data"
+    assert (tmp_path / "moved").read_text() == "data"
+    assert not src.exists()
 
 
 def test_move_corrupt_moves_the_file_aside_and_calibrates(root, capsys) -> None:

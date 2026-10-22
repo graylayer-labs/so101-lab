@@ -63,8 +63,9 @@ It runs `lerobot-calibrate` for one arm (`--role leader` or `follower`) with
 - When the file exists, LeRobot asks first: type `c` and press ENTER to
   recalibrate. Anything other than `c` keeps the existing file; the script
   then says the file is unchanged and removes the identical backup.
-- An existing file that cannot be loaded is refused before LeRobot runs,
-  because LeRobot would crash loading it. The error prints the `mv` command
+- An existing file that cannot be loaded or fails the sanity checks is
+  refused before LeRobot runs; the error says whether LeRobot itself would
+  crash loading it. The error prints the `mv` command
   that moves it to the backup path; `--move-corrupt` does that move and
   calibrates from scratch.
 - Ctrl-C during the run (exit 130) or a LeRobot error prints the backup path
