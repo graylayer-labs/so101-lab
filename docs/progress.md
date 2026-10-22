@@ -2,6 +2,14 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · First arm calibrations are committed, and checked in CI
+
+The owner's initial calibrations of the leader and follower arms are now in
+`hardware/calibration/{leader,follower}/main.json`. A new test loads every
+JSON under `hardware/calibration/` and runs the sanity checks, one test per
+file, so a bad calibration commit turns CI red and names the file. Both files
+pass. Nothing was run on hardware in this task.
+
 ## 2026-10-22 · Repo checked against the org standard
 
 The repo was checked row by row against the org's repo standard. The task

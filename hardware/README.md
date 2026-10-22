@@ -20,6 +20,10 @@ the file in after running LeRobot's calibration; it uses LeRobot's JSON
 layout, and `so101.load_calibration` checks it. Recalibrate, and replace the
 file, after reassembling an arm or replacing a servo.
 
+`calibration/leader/main.json` and `calibration/follower/main.json` are the
+owner's initial calibrations of both arms, dated 2026-10-22. A test
+(`shared/so101/tests/test_calibration_files.py`) checks every JSON here.
+
 ## URDF and meshes
 
 The SO-101 description comes from the upstream
