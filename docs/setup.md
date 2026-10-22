@@ -5,8 +5,9 @@ Each step below says what its script checks before it asks LeRobot to touch
 a servo, the exact command, what the dry run prints, and what to do when it
 fails.
 
-**Nothing in this runbook has been run on hardware yet.** Every output block
-is a `--dry-run` (or an error case) run on a laptop with no arm attached. See
+**None of the `so101-*` scripts has run on the arms yet.** Every output block
+is a `--dry-run` (or an error case) run on a laptop with no arm attached. The
+arms already have a first calibration (#39), made outside these scripts. See
 [What has not been tested on hardware](#what-has-not-been-tested-on-hardware).
 
 Outputs are shown with `<root>` for the workspace folder and `<home>` for the
@@ -37,6 +38,12 @@ Backup file names carry a UTC time stamp, so yours will differ.
    `/dev/cu.usbmodem*` and `/dev/tty.usbmodem*`. LeRobot accepts both. This
    workspace writes and prefers the `cu.*` name, which is what pyserial
    lists. See [Troubleshooting](#troubleshooting).
+
+6. **Arms already assembled and calibrated?** The repo ships a first
+   calibration of both arms (#39). If your arms are in that state, skip Steps
+   2 and 3: do Install, Step 1 if `configs/local.yaml` does not exist yet,
+   then Step 5 (the doctor) and Step 6 (teleop). Use `so101-calibrate` (Step 4)
+   only after you reassemble an arm or replace a servo.
 
 ## Install
 
@@ -103,7 +110,7 @@ Would write <root>/configs/local.yaml (create it from <root>/configs/example.yam
 The result is checked with so101.machine_config before it is written.
 ```
 
-Then, with both arms plugged in and powered:
+Then, with both controller boards plugged in by USB and their supplies connected (on a new kit, before assembly, that is just the two boards):
 
 ```bash
 uv run so101-find-ports
@@ -201,8 +208,11 @@ Dry run: nothing was asked or run.
 ```
 
 Gear table, from the [LeRobot guide](https://huggingface.co/docs/lerobot/so101).
-Match it to the C0xx label on each leader servo before you assign IDs. The
-servo codes come from [`hardware/bom.md`](../hardware/bom.md).
+The servo codes come from [`hardware/bom.md`](../hardware/bom.md). When
+LeRobot asks for a joint on the leader, plug in the servo with that row's
+code: for 'gripper' a C046, for 'wrist_roll' a C046, for 'wrist_flex' a C046,
+for 'elbow_flex' a C044, for 'shoulder_lift' a C001, for 'shoulder_pan' a
+C044. Read the C0xx label on each servo before you plug it in.
 
 | ID | Joint | Leader gear (servo code) | Follower gear |
 |---|---|---|---|
@@ -237,14 +247,15 @@ loose. Check, in order: the power supply, the USB cable to the board, the
 
 No script. Follow the [LeRobot SO-101 guide](https://huggingface.co/docs/lerobot/so101#step-by-step-assembly-instructions),
 joint 1 to the gripper, with the leader's handle and trigger on the leader.
-Route cables so every joint can reach its full range, and clamp both bases to
-the table.
+Our advice, not from the upstream guide: route cables so every joint can
+reach its full range, and clamp both bases to the table.
 
 The guide advises installing one 3-pin cable in each servo as you place it.
 Do this after Step 2, so every servo already has its ID.
 
-Reassembling an arm or swapping a servo invalidates its calibration: run
-Step 4 for that arm again.
+Our advice, not from the upstream guide: treat reassembling an arm or
+swapping a servo as invalidating its calibration, and run Step 4 for that arm
+again.
 
 ## Step 4. Calibrate both arms
 
@@ -262,20 +273,10 @@ the follower copy the leader. The result lands in
 - An existing file is copied to
   `hardware/calibration/<role>/backups/<id>.<UTC time>.json.bak` first.
 
-```bash
-uv run so101-calibrate --role leader --dry-run
-```
-
-Output when a file already exists (the repo ships the owner's first
-calibration, #39):
-
-```text
-Calibration file: <root>/hardware/calibration/leader/main.json
-Backup: <root>/hardware/calibration/leader/backups/main.20261022T205800Z.json.bak
-Command: lerobot-calibrate --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem0000000001 --teleop.id=main --teleop.calibration_dir=<root>/hardware/calibration/leader
-LeRobot will find the existing file and ask what to do: type 'c' and press ENTER to recalibrate; anything other than 'c' keeps the existing file.
-Dry run: nothing was backed up, moved, run or written.
-```
+Calibrate the follower first, as LeRobot's guide does. Output when a file
+already exists (the repo ships the owner's first calibration, #39). Note that
+the script's own last-but-one line, "anything other than 'c' keeps the
+existing file", understates what LeRobot does: see the warning below.
 
 ```bash
 uv run so101-calibrate --role follower --dry-run
@@ -285,6 +286,20 @@ uv run so101-calibrate --role follower --dry-run
 Calibration file: <root>/hardware/calibration/follower/main.json
 Backup: <root>/hardware/calibration/follower/backups/main.20261022T205800Z.json.bak
 Command: lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower
+LeRobot will find the existing file and ask what to do: type 'c' and press ENTER to recalibrate; anything other than 'c' keeps the existing file.
+Dry run: nothing was backed up, moved, run or written.
+```
+
+Then the leader:
+
+```bash
+uv run so101-calibrate --role leader --dry-run
+```
+
+```text
+Calibration file: <root>/hardware/calibration/leader/main.json
+Backup: <root>/hardware/calibration/leader/backups/main.20261022T205800Z.json.bak
+Command: lerobot-calibrate --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem0000000001 --teleop.id=main --teleop.calibration_dir=<root>/hardware/calibration/leader
 LeRobot will find the existing file and ask what to do: type 'c' and press ENTER to recalibrate; anything other than 'c' keeps the existing file.
 Dry run: nothing was backed up, moved, run or written.
 ```
@@ -306,12 +321,33 @@ uv run so101-calibrate --role follower
 uv run so101-calibrate --role leader
 ```
 
-What you do, from the upstream guide: when LeRobot asks, move the arm so every
-joint sits in the middle of its range and press ENTER, then move each joint
-through its full range of motion. If a file exists, LeRobot first asks what
-to do: type `c` and press ENTER to recalibrate. Anything else keeps the file;
-the script then says "Calibration file unchanged", removes the identical
-backup and exits 0.
+**Warning: ENTER at the first prompt writes the old file to the motors.**
+When a calibration file exists, LeRobot first asks:
+
+```text
+Press ENTER to use provided calibration file associated with the id main, or type 'c' and press ENTER to run calibration:
+```
+
+Anything other than `c` does not just keep the file: LeRobot writes that
+file's offsets and limits to the motors ("Writing calibration file associated
+with the id main to the motors"). After a reassembly or a servo swap those
+values are stale, and pressing ENTER by mistake pushes them onto the motors.
+After a reassembly, type `c`. The script then says "Calibration file
+unchanged", removes the identical backup and exits 0.
+
+After `c` (or with no file yet), LeRobot's prompts are, in order (quoted from
+`so_follower.py` and `so_leader.py` in lerobot 0.6.1):
+
+1. `Move <arm> to the middle of its range of motion and press ENTER....`
+   Put every joint mid-range, then press ENTER.
+2. `Move all joints except 'wrist_roll' sequentially through their entire
+   ranges of motion.` then `Recording positions. Press ENTER to stop...`
+   Move each joint, except the wrist roll, from one end to the other. Do not
+   move `wrist_roll`: LeRobot fixes its range at 0 to 4095. When every joint
+   has been through its full range, press ENTER to stop recording. Until you
+   do, it keeps recording.
+
+LeRobot then prints `Calibration saved to <path>`.
 
 After a successful run the script loads the new file and prints a "Changes
 per joint" table against the old file (first calibration: "no previous file,
@@ -429,7 +465,7 @@ uv run so101-teleop                  # with the configured cameras
 uv run so101-teleop --display        # also show the data live
 ```
 
-Try `--no-cameras` first, so a camera problem cannot hide an arm problem.
+Our advice, not from the upstream guide: try `--no-cameras` first, so a camera problem cannot hide an arm problem.
 
 **If it fails:**
 
@@ -551,22 +587,24 @@ already.
 
 ## What has not been tested on hardware
 
-None of the steps. Every script is tested with fakes, and every output above
-is a dry run or an error case with no arm attached.
+None of the `so101-*` scripts has run on the arms. Every script is tested
+with fakes, and every output above is a dry run or an error case with no arm
+attached. The arms themselves were assembled, given IDs and calibrated
+before these scripts existed (#39), outside them.
 
 | Step | Tested | Not yet seen |
 |---|---|---|
-| 1. `so101-find-ports` | Unplug and replug logic with fake port lists | Real ports on the Mac; the `cu.*` names it writes |
+| 1. `so101-find-ports` | Unplug and replug logic with fake port lists | Real ports on the Mac; the `cu.*` names it writes; LeRobot accepting both `tty.*` and `cu.*` names |
 | 2. `so101-setup-motors` | Command line parsed by LeRobot's own config classes | A real run: the per-motor prompts and the IDs written |
-| 3. Assembly | - | All of it |
-| 4. `so101-calibrate` | Backup, diff, checks and failure paths with a fake LeRobot | A real run, and whether the ENTER and `c` prompts work as described |
-| 5. `so101-doctor` | Checks with fakes; ran on a laptop with no arm | An all-PASS run; `--open-cameras` on the real cameras |
-| 6. `so101-teleop` | Gate and command line | The follower tracking the leader |
+| 3. Assembly | - | Not covered by any script; the arms were built before this runbook |
+| 4. `so101-calibrate` | Backup, diff, checks and failure paths with a fake LeRobot | A real run and the ENTER and `c` prompts; a real `--move-corrupt`; the Ctrl-C and half-written-file restore |
+| 5. `so101-doctor` | Checks with fakes; ran on a laptop with no arm | An all-PASS run; `--open-cameras` on the real cameras; the macOS camera permission prompt |
+| 6. `so101-teleop` | Gate and command line | The follower tracking the leader; `--display` |
 | 7. `so101-record` | Gate, dataset checks and command line, parsed by LeRobot's `RecordConfig` | A real episode written, and `--resume` on a real dataset |
 
 The calibration files in `hardware/calibration/` are the owner's first
-calibrations from 2026-10-22 (#39). They pass the checks; this runbook does
-not say how they were made.
+calibrations from 2026-10-22 (#39), made outside the scripts. They pass the
+checks.
 
 ## Progress checklist
 
