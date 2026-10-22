@@ -2,6 +2,16 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · CI reports as checks / checks with pinned actions
+
+The CI check now reports as `checks / checks`, the same name the other org
+repos use, and every action is pinned to a full commit SHA with its version
+in a comment. Dependabot's existing `github-actions` entry keeps bumping
+them. The org's shared Python workflow is not used yet: it syncs without
+`--all-packages`, so `projects/hw-setup` and LeRobot would not be installed.
+The steps stay in a local `checks.yml` until the shared workflow gains an
+input for the sync arguments.
+
 ## 2026-10-22 · A doctor command checks the setup before you touch hardware
 
 `uv run so101-doctor` reports PASS, WARN or FAIL for the LeRobot version
