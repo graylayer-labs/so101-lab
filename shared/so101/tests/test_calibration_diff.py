@@ -15,7 +15,7 @@ def test_identical_calibrations_have_no_changes():
     calib = _load("follower_main")
     diff = diff_calibrations(calib, calib)
     assert not diff.has_changes
-    assert diff.added == [] and diff.removed == []
+    assert diff.added == () and diff.removed == ()
     assert "no differences" in format_diff(diff)
 
 
@@ -32,7 +32,7 @@ def test_changed_fields_report_old_new_and_delta():
     assert (c.old, c.new, c.delta) == (1207, 1247, 40)
     c = changes[("wrist_roll", "range_max")]
     assert c.delta == -100
-    assert changes[("gripper", "drive_mode")].delta == 1
+    assert changes[("gripper", "drive_mode")].delta is None
 
 
 def test_added_and_removed_joints():
@@ -41,9 +41,9 @@ def test_added_and_removed_joints():
     removed = new.pop("gripper")
     new["extra"] = replace(removed, id=7)
     diff = diff_calibrations(old, new)
-    assert diff.removed == ["gripper"]
-    assert diff.added == ["extra"]
-    assert diff.changes == []
+    assert diff.removed == ("gripper",)
+    assert diff.added == ("extra",)
+    assert diff.changes == ()
     assert diff.has_changes
 
 
@@ -55,6 +55,8 @@ def test_format_is_a_table_listing_changes():
     row = next(line for line in lines if "elbow_flex" in line)
     assert row.split() == ["elbow_flex", "homing_offset", "1207", "1247", "+40"]
     assert any("wrist_roll" in line and "-100" in line for line in lines)
+    grip = next(line for line in lines if "gripper" in line)
+    assert grip.split() == ["gripper", "drive_mode", "0", "1", "-"]
 
 
 def test_format_lists_added_and_removed_joints():
@@ -63,3 +65,29 @@ def test_format_lists_added_and_removed_joints():
     del new["gripper"]
     text = format_diff(diff_calibrations(old, new))
     assert "removed: gripper" in text
+
+
+def test_swapped_servo_id_appears_in_the_diff():
+    old = _load("follower_main")
+    new = dict(old)
+    new["elbow_flex"] = replace(old["elbow_flex"], id=old["wrist_flex"].id)
+    diff = diff_calibrations(old, new)
+    change = next(c for c in diff.changes if c.field == "id")
+    assert (change.joint, change.old, change.new) == ("elbow_flex", 3, 4)
+    assert "elbow_flex  id" in format_diff(diff)
+
+
+def test_added_and_removed_lines_in_table():
+    old = _load("follower_main")
+    new = dict(old)
+    new["extra"] = replace(new.pop("gripper"), id=7)
+    new["elbow_flex"] = replace(old["elbow_flex"], range_min=1000)
+    lines = format_diff(diff_calibrations(old, new)).splitlines()
+    assert lines[-2:] == ["removed: gripper", "added: extra"]
+    assert any("elbow_flex" in line for line in lines)
+
+
+def test_diff_is_immutable():
+    diff = diff_calibrations(_load("follower_main"), _load("follower_recalibrated"))
+    assert isinstance(diff.changes, tuple)
+    assert isinstance(diff.added, tuple) and isinstance(diff.removed, tuple)
