@@ -5,6 +5,7 @@ from so101.calibration import (
     CalibrationError,
     JointCalibration,
     calibration_path,
+    check_calibration,
     load_calibration,
 )
 from so101.machine_config import (
@@ -26,6 +27,7 @@ __all__ = [
     "MachineConfig",
     "MachineConfigError",
     "calibration_path",
+    "check_calibration",
     "load_calibration",
     "load_machine_config",
 ]

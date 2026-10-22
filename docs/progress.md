@@ -2,6 +2,13 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · A bad calibration now names the joint
+
+`so101.check_calibration` checks a calibration for inverted ranges, ranges
+too narrow to be real, a gripper span outside what the gripper can do, and
+motor ids that do not match the joint order (1 to 6). Every failure is listed
+with the joint and the check that caught it. Nothing was run on hardware.
+
 ## 2026-10-22 · LeRobot installed in the workspace
 
 The new `hw-setup` project pins `lerobot[feetech]==0.6.1`, so LeRobot's arm
