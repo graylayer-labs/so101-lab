@@ -29,6 +29,9 @@ calibration gate runs first, also under ``--dry-run``. Then:
 - A root that exists with incomplete metadata (say, after a crash) can be
   neither created nor resumed. It is named as such, with an ``mv`` command to
   set it aside; nothing is deleted.
+- A new dataset whose name starts with ``eval_`` is refused, as LeRobot does
+  when it creates one (scripts/lerobot_record.py L431-436). Resume has no
+  such check there, so an ``eval_`` dataset can be resumed.
 """
 
 import argparse
@@ -49,6 +52,7 @@ PROG = "so101-record"
 INFO_FILE = Path("meta") / "info.json"
 TASKS_FILE = Path("meta") / "tasks.parquet"
 EPISODES_DIR = Path("meta") / "episodes"
+EVAL_PREFIX = "eval_"
 _REPO_ID = re.compile(r"[^/\s]+/[^/\s]+")
 
 Runner = Callable[[list[str]], int]
@@ -217,7 +221,13 @@ def main(
     root: Path | None = None,
     lerobot_home: Path | None = None,
 ) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if not args.resume and args.repo_id.split("/", 1)[1].startswith(EVAL_PREFIX):
+        parser.error(
+            f"--repo-id: names starting with {EVAL_PREFIX!r} are reserved by "
+            "LeRobot for policy evaluation; choose another name"
+        )
     try:
         workspace = root if root is not None else find_workspace_root()
         config = load_local_config(workspace, args.config)

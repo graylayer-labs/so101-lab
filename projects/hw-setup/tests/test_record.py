@@ -322,6 +322,34 @@ def test_empty_folder_is_an_incomplete_dataset(
     assert "incomplete dataset" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("dry", [[], ["--dry-run"]])
+def test_eval_names_are_refused_for_a_new_dataset(
+    root: Path, home: Path, dry: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["--task", "T", "--repo-id", "me/eval_cube", "--episodes", "1", *dry]
+    runner = Runner()
+    with pytest.raises(SystemExit) as err:
+        run(args, root, home, runner)
+    assert err.value.code == 2
+    assert runner.calls == []
+    assert "eval_" in capsys.readouterr().err
+
+
+def test_eval_names_can_be_resumed(root: Path, home: Path) -> None:
+    # LeRobot checks the prefix only when it creates a dataset.
+    make_dataset(home / "me" / "eval_cube")
+    args = ["--task", "T", "--repo-id", "me/eval_cube", "--episodes", "1"]
+    runner = Runner()
+    assert run([*args, "--resume"], root, home, runner) == 0
+    assert len(runner.calls) == 1
+
+
+def test_eval_only_matters_in_the_name_part(root: Path, home: Path) -> None:
+    runner = Runner()
+    args = ["--task", "T", "--repo-id", "eval_me/cube", "--episodes", "1"]
+    assert run(args, root, home, runner) == 0
+
+
 def test_resume_on_an_existing_dataset(root: Path, home: Path) -> None:
     target = make_dataset(home / "me" / "cube")
     runner = Runner()
