@@ -2,6 +2,12 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · Type stubs no longer installed with so101
+
+`types-pyyaml` moved from `so101`'s runtime dependencies to the workspace dev
+group, so installing `so101` pulls in only `pyyaml`. `uv run ty check` still
+passes.
+
 ## 2026-10-22 · A bad calibration now names the joint
 
 `so101.check_calibration` checks a calibration for inverted ranges, ranges
