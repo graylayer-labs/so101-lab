@@ -2,6 +2,16 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-22 · LeRobot commands are built from the machine config
+
+`hw_setup.lerobot_argv` builds the `lerobot-setup-motors`,
+`lerobot-calibrate`, `lerobot-teleoperate` and `lerobot-record` commands
+from `configs/local.yaml`: the follower's port, id and cameras go to
+`--robot.*`, the leader's to `--teleop.*`, and both read their calibration
+from `hardware/calibration/<role>/`. The tests feed every command to
+LeRobot 0.6.1's own argument parser, so a wrong flag name fails them.
+Nothing was run on hardware.
+
 ## 2026-10-22 · Every source module has tests, 100% covered
 
 Coverage rose from 93% to 100% (line and branch) across `so101` and
