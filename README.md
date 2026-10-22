@@ -15,7 +15,7 @@ same version.
 - Done: uv workspace with a shared `so101` package, the machine config loader and calibration checks and files.
 - Done: the bring-up tools (#13-#18): find ports, set motor IDs, calibrate, teleoperate, record locally and the doctor. All tested with fakes only.
 - Done: the bill of materials (`hardware/bom.md`) and the runbook, [`docs/setup.md`](docs/setup.md).
-- Next: the owner's hardware steps (#29-#33), following `docs/setup.md`. No step has run on the arms yet.
+- Next: the owner's hardware steps (#29-#33), following `docs/setup.md`. None of the `so101-*` scripts has run on the arms yet; both arms already have a first calibration (#39), made outside them.
 - Next: shared CI (#12).
 
 ## Pipeline
@@ -37,7 +37,7 @@ its own goal, expected results and status.
 | `projects/` | One folder per project; `projects/_template/` is the skeleton to copy. |
 | `hardware/` | Calibration JSON, URDF, CAD and the bill of materials. |
 | `configs/` | Machine config (ports, cameras): `example.yaml` committed, `local.yaml` not. |
-| `scripts/` | Planned setup scripts around the LeRobot CLIs. |
+| `scripts/` | Reserved for thin wrappers around the LeRobot CLIs; holds only a README. The `so101-*` commands live in `projects/hw-setup`. |
 | `docs/progress.md` | What changed, newest first. |
 | `docs/setup.md` | The runbook: unboxing to the first recorded dataset, one script per step. |
 | `docs/decisions.md` | One line per decision and its reason. |
