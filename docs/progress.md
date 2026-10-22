@@ -13,8 +13,8 @@ calibrations were made with LeRobot directly.
 | Claim | Number | Where |
 |---|---|---|
 | Bring-up commands on main | 6 (find-ports, setup-motors, calibrate, teleop, record, doctor) | `projects/hw-setup/` |
-| Tests on main | 268 passing, 0 hardware needed | `uv run pytest` |
-| Line and branch coverage of `src/` at the coverage audit | 93% before, 100% after | PR #46 |
+| Tests on main | 268 passing (32 at the start of the shift), none need hardware | `uv run pytest` |
+| Line and branch coverage of `src/` at the coverage audit (95% on main now, after the new tools) | 93% before, 100% after | PR #46 |
 | PRs merged this shift, each with green CI and a posted review | 18 | #1, #36 to #59 |
 | CI time with LeRobot and its dataset extra | about 1 minute | PR #56 checks |
 | Real bugs caught by review before merge | 6 | below |
@@ -25,22 +25,23 @@ calibrations were made with LeRobot directly.
 turns the machine config into LeRobot's flags. Its tests feed each command
 through LeRobot's own config parser, so a misspelt flag fails a test instead
 of failing at the arm. Flag names were read from the LeRobot 0.6.1 source,
-not its docs, because `--help` prints every robot type and is unusable.
+not only its docs, because `--help` prints over 1,200 lines covering every
+robot type.
 
 **Review found real bugs that the tests had missed.** Each one would have hit
 the arms or the data:
 
-- A relative repo path made LeRobot look in the wrong folder and silently
-  start a fresh calibration (#11).
+- A relative repo path would have made LeRobot look in the wrong folder and
+  silently start a fresh calibration (#11).
 - The calibration diff ignored servo IDs, so swapped IDs looked like "no
   change" (#20).
 - `so101-find-ports` wrote `local.yaml` in whatever folder it was run from
   (#13).
 - The parts list could be read as putting 12 V on the leader (#28).
-- `so101-record --resume` could pull a public dataset's metadata from the
-  Hub over the local copy (#17).
-- `so101-doctor` failed every Mac port, because macOS lists only `/dev/cu.*`
-  names. The test's fake port list used `tty.*`, which real pyserial never
+- `so101-record --resume` on a partly written dataset could pull a public
+  dataset's metadata from the Hugging Face Hub over the local copy (#17).
+- `so101-doctor` failed any Mac port written as `/dev/tty.*`, because macOS
+  lists only `/dev/cu.*` names. The test's fake port list used `tty.*`, which real pyserial never
   returns (#18).
 
 The lesson from the last one: a fake in a test must copy what the real tool
