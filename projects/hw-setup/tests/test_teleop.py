@@ -139,6 +139,23 @@ def test_bad_calibration_refuses_even_in_dry_run(
     assert problem in err
 
 
+def test_unreadable_calibration_file_is_refused_without_a_traceback(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = calib(root, "follower")
+    path.chmod(0)
+    try:
+        runner = Runner()
+        code = main([], runner=runner, root=root)
+    finally:
+        path.chmod(0o644)
+    err = capsys.readouterr().err
+    assert code == 1
+    assert runner.calls == []
+    assert "follower" in err
+    assert "cannot be read" in err
+
+
 def test_both_bad_arms_are_both_named(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

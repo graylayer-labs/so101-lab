@@ -49,6 +49,11 @@ def calibration_problems(config: MachineConfig, root: Path) -> list[str]:
                 f"{role.value} arm ({arm_id}): calibration is not valid JSON: "
                 f"{path}: {err}"
             )
+        except OSError as err:  # for example permissions 000
+            problems.append(
+                f"{role.value} arm ({arm_id}): calibration cannot be read: "
+                f"{path}: {err}"
+            )
     return problems
 
 
