@@ -25,6 +25,7 @@ from lerobot.configs.default import DatasetConfig
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.configs.types import FeatureType, PolicyFeature
 from lerobot.datasets import LeRobotDatasetMetadata
+from lerobot.policies import make_pre_post_processors
 from lerobot.policies.act.configuration_act import ACTConfig
 from lerobot.utils.feature_utils import hw_to_dataset_features
 from safetensors.torch import save_file
@@ -131,6 +132,7 @@ def write_policy(
     device: str = "cuda",
     weights: bool = True,
     train_config: bool = True,
+    processors: bool = True,
 ) -> Path:
     """A ``pretrained_model`` folder saved with LeRobot's own config savers."""
     path.mkdir(parents=True)
@@ -152,6 +154,11 @@ def write_policy(
             root=None if dataset_root is None else str(dataset_root),
         )
         TrainPipelineConfig(dataset=dataset, policy=policy)._save_pretrained(path)
+    if processors:
+        # policy_preprocessor.json and policy_postprocessor.json, as
+        # lerobot-train saves them (common/train_utils.py L164-166).
+        for pipeline in make_pre_post_processors(policy, dataset_stats=None):
+            pipeline.save_pretrained(path)
     if weights:
         save_file({"w": torch.zeros(1)}, str(path / "model.safetensors"))
     return path
@@ -178,6 +185,7 @@ def make_policy(tmp_path: Path) -> MakePolicy:
         device: str = "cuda",
         weights: bool = True,
         train_config: bool = True,
+        processors: bool = True,
         record_dataset_root: bool = True,
     ) -> Path:
         dataset_root = tmp_path / "datasets" / "pick_cube"
@@ -191,6 +199,7 @@ def make_policy(tmp_path: Path) -> MakePolicy:
             device=device,
             weights=weights,
             train_config=train_config,
+            processors=processors,
         )
 
     return make

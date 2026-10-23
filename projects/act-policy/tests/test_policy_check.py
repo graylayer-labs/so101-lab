@@ -39,7 +39,12 @@ def test_missing_folder_is_refused_before_lerobot_sees_it(tmp_path: Path) -> Non
 
 @pytest.mark.parametrize(
     ("option", "missing"),
-    [("weights", "model.safetensors"), ("train_config", "train_config.json")],
+    [
+        ("weights", "model.safetensors"),
+        ("train_config", "train_config.json"),
+        # LeRobot would fail on these only after connecting the robot.
+        ("processors", "policy_preprocessor.json"),
+    ],
 )
 def test_missing_checkpoint_files_are_named(
     make_policy: MakePolicy, option: str, missing: str

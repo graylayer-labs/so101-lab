@@ -101,8 +101,8 @@ default; the first trial creates it and later ones add to it.
 Checks before anything runs, also with `--dry-run`; any failure exits 1:
 
 - The follower's calibration passes. The leader's is not needed.
-- `--policy` is a folder with `config.json`, `model.safetensors` and
-  `train_config.json`, and LeRobot loads `config.json` as a policy config.
+- `--policy` is a folder with `config.json`, `model.safetensors`,
+  `train_config.json` and the two `policy_*processor.json` files, and LeRobot loads `config.json` as a policy config.
 - The training dataset's `meta/info.json` can be read: `dataset.root` from
   `train_config.json`, or `$HF_LEROBOT_HOME/<repo_id>`, or
   `--train-dataset PATH`.

@@ -5,8 +5,9 @@ Paths are relative to ``site-packages/lerobot`` (0.6.1).
 A checkpoint folder is what ``lerobot-train`` writes to
 ``checkpoints/<step>/pretrained_model/`` (common/train_utils.py L119-126):
 ``config.json`` (the policy config), ``model.safetensors`` (the weights) and
-``train_config.json`` (the training run's config, with the dataset it used).
-All three are required here.
+``train_config.json`` (the training run's config, with the dataset it used)
+and the processor pipelines ``policy_preprocessor.json`` and
+``policy_postprocessor.json`` (L164-166). All are required here.
 
 - The folder is checked before LeRobot sees it: ``from_pretrained`` reads a
   path that is not a folder as a Hub repo id and downloads it
@@ -43,6 +44,11 @@ from so101.machine_config import MachineConfig
 POLICY_CONFIG = "config.json"
 WEIGHTS = "model.safetensors"
 TRAIN_CONFIG = "train_config.json"
+# The processor pipelines lerobot-train saves next to the weights
+# (common/train_utils.py L164-166; names from utils/constants.py L58-59).
+# lerobot-rollout loads them only after connecting the robot (context.py
+# L466-468), so a missing one is caught here first.
+PROCESSORS = ("policy_preprocessor.json", "policy_postprocessor.json")
 INFO_FILE = Path("meta") / "info.json"
 IMAGE_PREFIX = "observation.images."
 DEVICE_ORDER = ("cuda", "mps", "cpu")
@@ -143,7 +149,9 @@ def load_policy(
     if not path.is_dir():
         raise PolicyError(f"policy {path} is not a folder")
     missing = [
-        n for n in (POLICY_CONFIG, WEIGHTS, TRAIN_CONFIG) if not (path / n).is_file()
+        n
+        for n in (POLICY_CONFIG, WEIGHTS, TRAIN_CONFIG, *PROCESSORS)
+        if not (path / n).is_file()
     ]
     if missing:
         raise PolicyError(
