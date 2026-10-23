@@ -42,13 +42,16 @@ import argparse
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from act_policy.control_rate import LOW_HZ, ControlRate, measure
 from act_policy.policy_check import (
@@ -94,6 +97,13 @@ LOGS_DIR = "logs"
 class RunResult:
     code: int
     lines: list[str]  # stdout and stderr, merged, without line endings
+    interrupted: bool = False  # Ctrl-C during the run
+
+
+SHUTDOWN_LOG = "Shutdown signal"  # LeRobot's log on a signal, utils/process.py L89
+SHUTDOWN_GRACE_S = 1.0
+STOP_WAIT_S = 60.0
+INTERRUPTED = 130  # the shell's exit status for Ctrl-C
 
 
 Runner = Callable[[list[str]], RunResult]
@@ -115,33 +125,114 @@ START_POSE_WARNING = (
 )
 
 
+def _wait(proc: subprocess.Popen[str], timeout: float) -> bool:
+    """Wait for ``proc`` to exit, up to ``timeout`` s; True if it did.
+
+    A further Ctrl-C while waiting is noted and the wait goes on: the child
+    gets it from the terminal too, and stopping here would leave the arm
+    moving behind a shell prompt.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return proc.poll() is not None
+        try:
+            proc.wait(timeout=left)
+            return True
+        except subprocess.TimeoutExpired:
+            return False
+        except KeyboardInterrupt:
+            print(
+                f"\n{PROG}: Ctrl-C again: LeRobot force-exits on a second signal "
+                "(utils/process.py L97-99); still waiting for it to exit.",
+                file=sys.stderr,
+            )
+
+
+def _stop_after_ctrl_c(proc: subprocess.Popen[str], lines: list[str]) -> None:
+    """Let LeRobot finish its own clean shutdown after a Ctrl-C.
+
+    A terminal Ctrl-C reaches the whole foreground process group, so
+    lerobot-rollout usually has it already. Sending another would be its
+    second signal, on which it force-exits (utils/process.py L85-99) and
+    may cut short the drive back to the start pose. So the signal is
+    forwarded only if LeRobot has not logged that it got one
+    (``Shutdown signal ... received``, L89) within ``SHUTDOWN_GRACE_S``.
+    """
+    seen = len(lines)
+    print(
+        f"\n{PROG}: Ctrl-C: waiting for lerobot-rollout to stop and return the "
+        f"follower to its start pose (up to {STOP_WAIT_S:.0f} s). Watch the arm.",
+        file=sys.stderr,
+    )
+    if _wait(proc, SHUTDOWN_GRACE_S):
+        return
+    if not any(SHUTDOWN_LOG in line for line in lines[seen:]):
+        print(f"{PROG}: forwarded Ctrl-C to lerobot-rollout.", file=sys.stderr)
+        proc.send_signal(signal.SIGINT)
+    if _wait(proc, STOP_WAIT_S):
+        return
+    print(
+        f"{PROG}: lerobot-rollout did not exit in {STOP_WAIT_S:.0f} s; "
+        "terminating it. Check the arm.",
+        file=sys.stderr,
+    )
+    proc.terminate()
+    if not _wait(proc, 5.0):
+        proc.kill()
+        proc.wait()
+
+
 def run_teed(argv: list[str]) -> RunResult:
     """Run ``argv``, copying its output to our stdout line by line, and keep it.
 
     stderr is merged into stdout: LeRobot logs to stderr (a
     ``logging.StreamHandler`` with no stream, utils/utils.py L85-88).
     ``PYTHONUNBUFFERED`` keeps the child's lines from waiting in a pipe
-    buffer. stdin is left alone, so the keyboard controls still work: LeRobot
-    reads keys with pynput's global listener or, on macOS without
-    Accessibility permission, from stdin when it is a TTY
-    (utils/keyboard_input.py L24-27, L269-275).
+    buffer. stdin is left alone and the child stays in our process group,
+    so the keyboard controls still work: LeRobot reads keys with pynput's
+    global listener or, on macOS without Accessibility permission, from
+    stdin when it is a TTY (utils/keyboard_input.py L24-27, L269-275).
+
+    A thread does the teeing, so output keeps flowing after a Ctrl-C while
+    ``_stop_after_ctrl_c`` waits for LeRobot's clean shutdown.
     """
     env = os.environ | {"PYTHONUNBUFFERED": "1"}
     lines: list[str] = []
-    with subprocess.Popen(
-        argv,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        env=env,
-    ) as proc:
-        assert proc.stdout is not None  # stdout=PIPE
-        for line in proc.stdout:
+    interrupted = False
+    proc: subprocess.Popen[str] | None = None
+    reader: threading.Thread | None = None
+
+    def tee(stream: IO[str]) -> None:
+        for line in stream:
             sys.stdout.write(line)
             sys.stdout.flush()
             lines.append(line.rstrip("\r\n"))
-    return RunResult(proc.returncode, lines)
+
+    try:
+        proc = subprocess.Popen(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=env,
+        )
+        assert proc.stdout is not None  # stdout=PIPE
+        reader = threading.Thread(target=tee, args=(proc.stdout,), daemon=True)
+        reader.start()
+        proc.wait()
+    except KeyboardInterrupt:
+        if proc is None:
+            raise
+        interrupted = True
+        _stop_after_ctrl_c(proc, lines)
+    if reader is not None:
+        reader.join(timeout=5.0)
+    if proc.stdout is not None:
+        proc.stdout.close()
+    return RunResult(proc.returncode, lines, interrupted)
 
 
 def _text(text: str) -> str:
@@ -411,75 +502,91 @@ def main(
     }
     scored: list[bool] = []
     rates: list[float | None] = []
-    for i in range(args.episodes):
-        resume = args.resume or i > 0
-        if resume:
-            problem = dataset_root_problem(dataset_root, workspace, resume=True)
-            if problem:
-                return _refuse(problem)
-        trial = count_trials(log) + 1
-        try:
-            answer = ask(
-                f"Trial {trial} ({i + 1} of {args.episodes}): is the follower at "
-                "its rest pose, the cube placed and the table clear? "
-                "Type y to start: "
+    try:
+        for i in range(args.episodes):
+            resume = args.resume or i > 0
+            if resume:
+                problem = dataset_root_problem(dataset_root, workspace, resume=True)
+                if problem:
+                    return _refuse(problem)
+            trial = count_trials(log) + 1
+            try:
+                answer = ask(
+                    f"Trial {trial} ({i + 1} of {args.episodes}): is the follower at "
+                    "its rest pose, the cube placed and the table clear? "
+                    "Type y to start: "
+                )
+            except EOFError:
+                answer = ""
+            if answer.strip().lower() != "y":
+                print("Stopped before the trial; nothing was run.")
+                break
+            episodes_before, frames_before = _counts(dataset_root)
+            result = runner(command(resume))
+            rollout_log = log.parent / LOGS_DIR / f"trial-{trial:03d}.log"
+            rollout_log.parent.mkdir(parents=True, exist_ok=True)
+            rollout_log.write_text("".join(f"{line}\n" for line in result.lines))
+            if result.interrupted:
+                print(
+                    f"{PROG}: trial {trial} stopped (Ctrl-C) and is not scored; "
+                    f"lerobot-rollout exited with {result.code}. Output: {rollout_log}",
+                    file=sys.stderr,
+                )
+                return INTERRUPTED
+            if result.code != 0:
+                print(
+                    f"{PROG}: lerobot-rollout exited with {result.code}; trial "
+                    f"{trial} is not scored. Stopping. Output: {rollout_log}",
+                    file=sys.stderr,
+                )
+                return result.code
+            after, frames_after = _counts(dataset_root)
+            saved = after > episodes_before
+            frames = None
+            if saved and frames_before is not None and frames_after is not None:
+                frames = frames_after - frames_before
+            rate = measure(result.lines, frames=frames, fps=policy.dataset_fps)
+            print(_describe_rate(rate))
+            if rate.low:
+                print(
+                    f"{PROG}: WARNING: trial {trial} ran at {rate.hz:.1f} Hz, below "
+                    f"{LOW_HZ:.0f} Hz. Note it with the result (#76); #82 asks for "
+                    "one diagnostic rerun with --device cpu or without --display.",
+                    file=sys.stderr,
+                )
+            try:
+                score = ask_score(ask)
+            except EOFError:
+                print(
+                    f"\n{PROG}: input ended; trial {trial} is not scored.",
+                    file=sys.stderr,
+                )
+                return 1
+            record = trial_record(
+                score,
+                trial=trial,
+                episode_index=after - 1 if saved else None,
+                now=now(),
+                context=context
+                | {
+                    "control_hz": rate.hz,
+                    "frames": rate.frames,
+                    "slow_steps": rate.slow_steps,
+                    "slowest_step_hz": rate.slowest_step_hz,
+                    "rollout_log": str(rollout_log),
+                },
             )
-        except EOFError:
-            answer = ""
-        if answer.strip().lower() != "y":
-            print("Stopped before the trial; nothing was run.")
-            break
-        episodes_before, frames_before = _counts(dataset_root)
-        result = runner(command(resume))
-        rollout_log = log.parent / LOGS_DIR / f"trial-{trial:03d}.log"
-        rollout_log.parent.mkdir(parents=True, exist_ok=True)
-        rollout_log.write_text("".join(f"{line}\n" for line in result.lines))
-        if result.code != 0:
-            print(
-                f"{PROG}: lerobot-rollout exited with {result.code}; trial "
-                f"{trial} is not scored. Stopping. Output: {rollout_log}",
-                file=sys.stderr,
-            )
-            return result.code
-        after, frames_after = _counts(dataset_root)
-        saved = after > episodes_before
-        frames = None
-        if saved and frames_before is not None and frames_after is not None:
-            frames = frames_after - frames_before
-        rate = measure(result.lines, frames=frames, fps=policy.dataset_fps)
-        print(_describe_rate(rate))
-        if rate.low:
-            print(
-                f"{PROG}: WARNING: trial {trial} ran at {rate.hz:.1f} Hz, below "
-                f"{LOW_HZ:.0f} Hz. Note it with the result (#76); #82 asks for "
-                "one diagnostic rerun with --device cpu or without --display.",
-                file=sys.stderr,
-            )
-        try:
-            score = ask_score(ask)
-        except EOFError:
-            print(
-                f"\n{PROG}: input ended; trial {trial} is not scored.", file=sys.stderr
-            )
-            return 1
-        record = trial_record(
-            score,
-            trial=trial,
-            episode_index=after - 1 if saved else None,
-            now=now(),
-            context=context
-            | {
-                "control_hz": rate.hz,
-                "frames": rate.frames,
-                "slow_steps": rate.slow_steps,
-                "slowest_step_hz": rate.slowest_step_hz,
-                "rollout_log": str(rollout_log),
-            },
+            append_trial(log, record)
+            scored.append(score.success)
+            rates.append(rate.hz)
+            print(f"Trial {trial} logged to {log}")
+    except KeyboardInterrupt:
+        print(
+            f"\n{PROG}: stopped (Ctrl-C) at a prompt; the trials scored so far "
+            f"are in {log}.",
+            file=sys.stderr,
         )
-        append_trial(log, record)
-        scored.append(score.success)
-        rates.append(rate.hz)
-        print(f"Trial {trial} logged to {log}")
+        return INTERRUPTED
     measured = ", ".join("?" if hz is None else f"{hz:.1f}" for hz in rates)
     print(
         f"This session: {sum(scored)}/{len(scored)} succeeded; control rate per "

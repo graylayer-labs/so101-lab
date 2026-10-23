@@ -11,6 +11,7 @@ metadata LeRobot reads back on ``--resume`` (the files
 
 import json
 import sys
+import time
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
@@ -50,7 +51,9 @@ class FakeRollout:
         saves: bool = True,
         frames: int = 900,
         output: Sequence[Sequence[str]] = (),
+        interrupted: bool = False,
     ) -> None:
+        self.interrupted = interrupted
         self.calls: list[list[str]] = []
         self.code = code
         self.saves = saves
@@ -74,7 +77,7 @@ class FakeRollout:
         info_path.write_text(json.dumps(info))
         index = len(self.calls) - 1
         lines = list(self.output[index]) if index < len(self.output) else []
-        return RunResult(self.code, lines)
+        return RunResult(self.code, lines, interrupted=self.interrupted)
 
 
 def flag(argv: list[str], name: str) -> str:
@@ -450,6 +453,94 @@ def test_run_teed_shows_and_returns_the_output(
     assert sorted(result.lines) == ["to err", "to out"]
     out = capfd.readouterr().out
     assert "to out" in out and "to err" in out
+
+
+# --- Ctrl-C during a trial -------------------------------------------------
+
+# A child that handles SIGINT as LeRobot 0.6.1 does (utils/process.py
+# L85-99): the first signal logs "Shutdown signal 2 received. Cleaning up…"
+# and starts a clean shutdown; a second one force-exits with status 1. The
+# clean shutdown takes about 1 s, standing in for the follower's drive back
+# to its start pose. ``TARGETS`` says who the child signals once it is
+# running: the parent only, or the parent and itself, as a terminal Ctrl-C
+# reaches the whole foreground process group.
+GRACEFUL_CHILD = """
+import logging, os, signal, sys, time
+logging.basicConfig(level=logging.INFO, format="INFO %(message)s")
+count = 0
+def handler(signum, frame):
+    global count
+    count += 1
+    logging.info(f" Shutdown signal {signum} received. Cleaning up…")
+    if count > 1:
+        logging.info("Force shutdown")
+        sys.exit(1)
+signal.signal(signal.SIGINT, handler)
+print("rollout running", flush=True)
+time.sleep(0.3)
+for pid in TARGETS:
+    os.kill(pid, signal.SIGINT)
+while count == 0:
+    time.sleep(0.01)
+print("returning to start pose", flush=True)
+time.sleep(1.0)
+print("done", flush=True)
+"""
+
+
+def graceful_child(targets: str) -> list[str]:
+    return [sys.executable, "-c", GRACEFUL_CHILD.replace("TARGETS", targets)]
+
+
+def test_ctrl_c_waits_for_lerobot_to_finish_and_does_not_signal_twice(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    started = time.monotonic()
+    result = run_teed(graceful_child("(os.getppid(), os.getpid())"))
+    assert time.monotonic() - started >= 1.0
+    assert result.interrupted is True
+    assert result.code == 0  # a second SIGINT would have forced status 1
+    assert "done" in result.lines
+    assert not any("Force shutdown" in line for line in result.lines)
+    captured = capfd.readouterr()
+    assert "done" in captured.out  # still teed after the Ctrl-C
+    assert "waiting for lerobot-rollout" in captured.err
+
+
+def test_ctrl_c_is_forwarded_when_the_child_did_not_get_it(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    result = run_teed(graceful_child("(os.getppid(),)"))
+    assert result.interrupted is True
+    assert result.code == 0
+    assert any("Shutdown signal 2 received" in line for line in result.lines)
+    assert "done" in result.lines
+    assert "forwarded Ctrl-C" in capfd.readouterr().err
+
+
+def test_an_interrupted_trial_is_not_scored(
+    workspace: Path, lerobot_home: Path, make_policy: MakePolicy
+) -> None:
+    runner = FakeRollout(interrupted=True)
+    ask = Answers("y")
+    args = base_args(make_policy(), 3)
+    assert run(workspace, lerobot_home, args, runner=runner, ask=ask) == 130
+    assert len(runner.calls) == 1
+    assert len(ask.prompts) == 1
+    assert not trials_file(workspace).exists()
+
+
+def test_ctrl_c_at_a_prompt_exits_without_a_traceback(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def interrupt(prompt: str = "") -> str:
+        raise KeyboardInterrupt
+
+    assert run(workspace, lerobot_home, base_args(make_policy()), ask=interrupt) == 130
+    assert "stopped (Ctrl-C)" in capsys.readouterr().err
 
 
 def test_cli_is_wired() -> None:
