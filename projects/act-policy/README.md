@@ -21,8 +21,10 @@ repo with flags we trust: local data only, nothing pushed to the Hub.
 
 - Done: `so101-train` builds and runs the `lerobot-train` command (#79),
   tested through LeRobot's own parser and a 4-step CPU run.
+- Done: `so101-eval` (gated `lerobot-rollout`, trial log, `--dry-run`);
+  tested with fakes and a 4-step CPU checkpoint, not yet run on the arm (#81).
 - Doing: the 1,000-step smoke run on the M4, once the #78 dataset exists.
-- Next: `so101-eval` (#81).
+- Next: train on the task dataset (#80), then run the 10 trials (#82).
 
 ## Train
 
@@ -60,6 +62,64 @@ uv run so101-train --repo-id local/so101_pick_cube_<stamp> --smoke
   torchcodec finds no FFmpeg libraries, so it is `pyav`). Video decoding is
   part of each step, so write the backend next to any steps/s figure, and
   compare LeRobot's `data_s` with `updt_s` in the log to see which one limits.
+
+## Evaluate a policy
+
+```bash
+uv run so101-eval --policy outputs/train/<run>/checkpoints/last/pretrained_model \
+    --task "Pick the cube and place it in the bin" --episodes 10 \
+    --episode-time-s 30 --dry-run        # check everything, print the command
+uv run so101-eval --policy ... --task "..." --episodes 10 --episode-time-s 30
+uv run so101-eval --policy ... --task "..." --episodes 5 --resume   # more trials
+```
+
+Each trial is one `lerobot-rollout --strategy.type=episodic` run of one
+episode. Only the follower is used: LeRobot's episodic rollout needs no
+teleop, and without one it drives the follower back to the pose it started
+in after the episode. Before every trial you type `y` to confirm the
+follower is at its rest pose; after it you score it:
+
+- success (cube released in the bin, no touch, within the time) or fail;
+- for a fail, the furthest stage reached: `none`, `reach`, `grasp`,
+  `place` or `release`;
+- the start position and a note on the failure mode, both optional.
+
+Each score is appended at once to `outputs/eval/<run>/trials.jsonl`, one
+JSON object per line: `trial`, `episode_index`, `time_utc`, `success`,
+`stage`, `start_position`, `notes`, then the run's settings (`policy`,
+`checkpoint`, `task`, `device`, `fps`, `episode_time_s`,
+`max_relative_target`, `dataset_repo_id`, `dataset_root`). `<run>` is the
+training run's folder name, the one above `checkpoints/`. The eval videos go
+to a local LeRobot dataset, `$HF_LEROBOT_HOME/local/rollout_<run>` by
+default; the first trial creates it and later ones add to it.
+
+Checks before anything runs, also with `--dry-run`; any failure exits 1:
+
+- The follower's calibration passes. The leader's is not needed.
+- `--policy` is a folder with `config.json`, `model.safetensors` and
+  `train_config.json`, and LeRobot loads `config.json` as a policy config.
+- The training dataset's `meta/info.json` can be read: `dataset.root` from
+  `train_config.json`, or `$HF_LEROBOT_HOME/<repo_id>`, or
+  `--train-dataset PATH`.
+- The cameras in `configs/local.yaml` match the policy's image inputs and
+  the training dataset: the same names, width x height and fps.
+- The device is available. `--device auto` (the default) picks cuda, then
+  mps, then cpu. On mps a warning gives the control-rate risk: a published
+  SO-101 ACT eval ran at about 15 Hz on an M4 with 40% success, against
+  30 Hz and 90% on CUDA for the same checkpoint. LeRobot logs `Record loop is running slower` when it misses the
+  target fps; below about 25 Hz, note it with the trials (#82).
+- The dataset root follows `so101-record`'s rules: outside the workspace,
+  new unless `--resume`, never half-written. Names must start with
+  `rollout_` (LeRobot refuses others, but only after the robot connects).
+
+`--dataset.push_to_hub=false` is always passed. `--max-step` caps each
+follower move as in `so101-teleop` (default 5). The fps is the training
+dataset's. Optional: `--repo-id`, `--dataset-root`, `--reset-time-s`
+(after a left-arrow re-record), `--device`, `--display`, `--config`.
+
+The follower's start pose is not checked by a reading: the repo defines no
+safe pose, and the leader is not connected to compare with. LeRobot holds
+the pose it starts from as "home", so start each trial at the rest pose.
 
 ## Layout
 
