@@ -230,6 +230,41 @@ def camera_problems(config: MachineConfig, policy: Policy) -> list[str]:
     return problems
 
 
+def eval_dataset_problems(dataset_root: Path, policy: Policy) -> list[str]:
+    """How an existing eval dataset differs from what the policy runs at.
+
+    ``LeRobotDataset.resume`` takes no fps and loads the stored metadata
+    (datasets/lerobot_dataset.py L797, L876-877), so frames recorded at the
+    policy's rate under another fps get the wrong timestamps, silently. The
+    camera names and sizes must match the policy's too.
+    """
+    info_path = dataset_root / INFO_FILE
+    try:
+        fps, cameras = _dataset_cameras(info_path)
+    except PolicyError as err:
+        return [str(err)]
+    problems = []
+    if fps != policy.dataset_fps:
+        problems.append(
+            f"eval dataset {dataset_root} is at {fps} fps; the policy was "
+            f"trained at {policy.dataset_fps} fps"
+        )
+    if set(cameras) != set(policy.cameras):
+        problems.append(
+            f"eval dataset {dataset_root} has cameras {_names(cameras)}; the "
+            f"policy has {_names(policy.cameras)}"
+        )
+    for name in sorted(set(cameras) & set(policy.cameras)):
+        height, width, _fps = cameras[name]
+        want_h, want_w = policy.cameras[name]
+        if (height, width) != (want_h, want_w):
+            problems.append(
+                f"eval dataset camera {name} is {width}x{height}; the policy "
+                f"was trained on {want_w}x{want_h}"
+            )
+    return problems
+
+
 def run_name(path: Path) -> tuple[str, str]:
     """``(training run, checkpoint)`` from ``.../<run>/checkpoints/<step>/...``.
 

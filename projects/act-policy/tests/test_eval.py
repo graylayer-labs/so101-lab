@@ -53,8 +53,10 @@ class FakeRollout:
         frames: int = 900,
         output: Sequence[Sequence[str]] = (),
         interrupted: bool = False,
+        cameras: dict[str, tuple[int, int]] | None = None,
     ) -> None:
         self.interrupted = interrupted
+        self.cameras = cameras or {"front": (480, 640), "wrist": (480, 640)}
         self.calls: list[list[str]] = []
         self.code = code
         self.saves = saves
@@ -66,6 +68,20 @@ class FakeRollout:
         root = Path(flag(argv, "--dataset.root"))
         info_path = root / "meta" / "info.json"
         info = json.loads(info_path.read_text()) if info_path.is_file() else {}
+        # What LeRobotDataset.create writes (rollout/context.py L436-441):
+        # the control fps and the robot's camera features, (h, w, c).
+        info.setdefault("fps", int(flag(argv, "--dataset.fps")))
+        info.setdefault(
+            "features",
+            {
+                f"observation.images.{name}": {
+                    "dtype": "video",
+                    "shape": [h, w, 3],
+                    "names": ["height", "width", "channels"],
+                }
+                for name, (h, w) in self.cameras.items()
+            },
+        )
         if self.saves:
             info["total_episodes"] = info.get("total_episodes", 0) + 1
             info["total_frames"] = info.get("total_frames", 0) + self.frames
@@ -257,7 +273,7 @@ def test_existing_dataset_root_needs_resume(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     root = lerobot_home / "local" / "rollout_act_pick_cube_last"
-    FakeRollout()(["x", f"--dataset.root={root}"])
+    FakeRollout()(["x", f"--dataset.root={root}", "--dataset.fps=30"])
     args = [*base_args(make_policy()), "--dry-run"]
     assert run(workspace, lerobot_home, args) == 1
     assert "--resume" in capsys.readouterr().err
@@ -583,3 +599,40 @@ def test_two_checkpoints_of_one_run_never_share_a_dataset_or_a_log(
         assert trial["checkpoint"] == checkpoint
         assert trial["dataset_repo_id"] == f"local/rollout_act_pick_cube_{checkpoint}"
         assert (lerobot_home / "local" / f"rollout_act_pick_cube_{checkpoint}").is_dir()
+
+
+def eval_dataset(
+    lerobot_home: Path, cameras: dict[str, tuple[int, int]] | None = None
+) -> Path:
+    """An eval dataset left by an earlier session, at the default root."""
+    root = lerobot_home / "local" / "rollout_act_pick_cube_last"
+    FakeRollout(cameras=cameras)(["x", f"--dataset.root={root}", "--dataset.fps=30"])
+    return root
+
+
+def test_resume_refuses_an_eval_dataset_at_another_fps(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = eval_dataset(lerobot_home)
+    info = json.loads((root / "meta" / "info.json").read_text())
+    (root / "meta" / "info.json").write_text(json.dumps(info | {"fps": 15}))
+    args = [*base_args(make_policy()), "--resume", "--dry-run"]
+    assert run(workspace, lerobot_home, args) == 1
+    err = capsys.readouterr().err
+    assert "eval dataset" in err and "15 fps" in err and "30 fps" in err
+
+
+def test_resume_refuses_an_eval_dataset_with_other_cameras(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    eval_dataset(lerobot_home, cameras={"front": (240, 320), "top": (480, 640)})
+    args = [*base_args(make_policy()), "--resume", "--dry-run"]
+    assert run(workspace, lerobot_home, args) == 1
+    err = capsys.readouterr().err
+    assert "top" in err and "320x240" in err

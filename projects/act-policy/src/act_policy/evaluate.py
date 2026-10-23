@@ -59,6 +59,7 @@ from act_policy.policy_check import (
     PolicyError,
     available_devices,
     camera_problems,
+    eval_dataset_problems,
     load_policy,
     run_name,
     select_device,
@@ -452,6 +453,12 @@ def main(
         problem = dataset_root_problem(dataset_root, workspace, args.resume)
         if problem:
             return _refuse(problem)
+        if args.resume:
+            problems = eval_dataset_problems(dataset_root, policy)
+            if problems:
+                for problem in problems:
+                    _refuse(problem)
+                return 1
 
         def command(resume: bool) -> list[str]:
             return rollout_argv(
