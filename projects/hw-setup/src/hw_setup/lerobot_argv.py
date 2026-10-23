@@ -77,7 +77,8 @@ def calibration_dir(repo_root: Path, role: ArmRole) -> Path:
     return root / CALIBRATION_ROOT / role.value
 
 
-def _arm_args(config: MachineConfig, role: ArmRole, repo_root: Path) -> list[str]:
+def arm_args(config: MachineConfig, role: ArmRole, repo_root: Path) -> list[str]:
+    """``--robot.*`` (follower) or ``--teleop.*`` (leader): type, port, id, dir."""
     arm = config.arms[role]
     prefix = _PREFIX[role]
     return [
@@ -99,10 +100,10 @@ def cameras_value(config: MachineConfig) -> str:
 
 
 def _pair_args(config: MachineConfig, repo_root: Path, cameras: bool) -> list[str]:
-    args = _arm_args(config, ArmRole.FOLLOWER, repo_root)
+    args = arm_args(config, ArmRole.FOLLOWER, repo_root)
     if cameras and config.cameras:
         args.append(f"--robot.cameras={cameras_value(config)}")
-    return args + _arm_args(config, ArmRole.LEADER, repo_root)
+    return args + arm_args(config, ArmRole.LEADER, repo_root)
 
 
 def max_relative_target_arg(value: float | None) -> str:
@@ -122,12 +123,12 @@ def setup_motors_argv(
     config: MachineConfig, role: ArmRole, repo_root: Path
 ) -> list[str]:
     """``lerobot-setup-motors`` for one arm."""
-    return ["lerobot-setup-motors", *_arm_args(config, role, repo_root)]
+    return ["lerobot-setup-motors", *arm_args(config, role, repo_root)]
 
 
 def calibrate_argv(config: MachineConfig, role: ArmRole, repo_root: Path) -> list[str]:
     """``lerobot-calibrate`` for one arm. Cameras are left out: not needed."""
-    return ["lerobot-calibrate", *_arm_args(config, role, repo_root)]
+    return ["lerobot-calibrate", *arm_args(config, role, repo_root)]
 
 
 def teleoperate_argv(
