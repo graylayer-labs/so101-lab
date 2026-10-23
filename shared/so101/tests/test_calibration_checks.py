@@ -42,6 +42,8 @@ def test_passing_fixtures_have_no_errors(fixture: str):
         ("range_width_fail", "wrist_flex", "range_width"),
         ("gripper_span_fail", "gripper", "gripper_span"),
         ("gripper_span_fail_high", "gripper", "gripper_span"),
+        ("gripper_span_fail_299", "gripper", "gripper_span"),
+        ("gripper_span_fail_2501", "gripper", "gripper_span"),
         ("ids_fail", "shoulder_lift", "joint_id"),
     ],
 )
@@ -67,6 +69,8 @@ def test_all_failures_are_reported_together():
     [
         ("gripper_span_fail", "gripper_span"),  # width 250, below 300
         ("gripper_span_fail_high", "gripper_span"),  # width 3000, above 2500
+        ("gripper_span_fail_299", "gripper_span"),  # one below the low bound
+        ("gripper_span_fail_2501", "gripper_span"),  # one above the high bound
     ],
 )
 def test_gripper_fixtures_trip_only_the_span_check(fixture: str, check: str):
