@@ -303,6 +303,17 @@ def test_dataset_record_is_read_from_local_files(
     json.dumps(record)
 
 
+def test_dataset_record_names_the_video_decode_backend(
+    tmp_path: Path, copy_dataset: CopyDataset
+) -> None:
+    from lerobot.utils.import_utils import get_safe_default_video_backend
+
+    root = copy_dataset(tmp_path / "local" / "tiny")
+    record = read_dataset_record("local/tiny", root)
+    assert record["decode_backend"] == get_safe_default_video_backend()
+    assert record["decode_backend"] in ("pyav", "torchcodec")
+
+
 def test_lerobot_train_runs_with_the_hub_offline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

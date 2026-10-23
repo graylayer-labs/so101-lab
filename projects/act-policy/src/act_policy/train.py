@@ -35,7 +35,8 @@ draccus parser and run its ``validate()``.
 
 ``dataset.json`` records the dataset's own metadata (repo_id, root, episode
 and frame counts, fps, robot type and camera features), so the eval tool can
-check that its cameras and fps match the ones the policy was trained on.
+check that its cameras and fps match the ones the policy was trained on,
+and the video decode backend (pyav or torchcodec) that the steps/s depend on.
 It is read with ``LeRobotDatasetMetadata`` from local files only: missing
 metadata is refused first, because LeRobot would otherwise download
 ``meta/`` from the Hub (datasets/dataset_metadata.py L134-148).
@@ -205,6 +206,7 @@ def read_dataset_record(repo_id: str, dataset_root: Path) -> dict[str, Any]:
             f"{', '.join(missing)}); LeRobot would fetch the metadata from the Hub"
         )
     from lerobot.datasets.dataset_metadata import LeRobotDatasetMetadata
+    from lerobot.utils.import_utils import get_safe_default_video_backend
 
     meta = LeRobotDatasetMetadata(repo_id, root=dataset_root)
     cameras = {key: meta.features[key] for key in meta.camera_keys}
@@ -217,6 +219,9 @@ def read_dataset_record(repo_id: str, dataset_root: Path) -> dict[str, Any]:
         "total_frames": meta.total_frames,
         "fps": meta.fps,
         "cameras": cameras,
+        # lerobot-train's default decoder here (configs/default.py L42):
+        # torchcodec if it loads, else pyav. It changes the steps/s.
+        "decode_backend": get_safe_default_video_backend(),
     }
     # Through JSON, so shapes are lists as they are in meta/info.json.
     return json.loads(json.dumps(record))
