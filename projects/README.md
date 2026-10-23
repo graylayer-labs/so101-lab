@@ -31,4 +31,4 @@ Third-party dependencies (LeRobot, torch, and so on) go in the project's own
 
 | Project | Goal | Status |
 |---|---|---|
-| (none yet) | | |
+| [act-policy](act-policy/) | Train and run an ACT policy on the follower | `so101-train` done; smoke run next |
