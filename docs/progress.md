@@ -15,8 +15,9 @@ M4 steps/s is still an estimate until the #78 dataset exists.
 | Claim | Number | Where |
 |---|---|---|
 | Real `lerobot-train` run in the tests, CPU, tiny ACT | 4 steps, 2.4 s | `test_a_real_cpu_micro_train` |
-| Flags checked by LeRobot's own parser and `validate()` | all 13 | `tests/test_train.py` |
-| Network connections allowed in the tests | 0 | `tests/conftest.py` |
+| Flags checked by LeRobot's own parser and `validate()` | 13 (12 always passed, plus `use_amp` on cuda) | `tests/test_train.py` |
+| Network connections in the test process | 0 (socket guard) | `tests/conftest.py` |
+| Network in the micro-train's `lerobot-train` child | none needed: the test passed under `sandbox-exec` with all outbound IP denied (reviewer's check) | `test_a_real_cpu_micro_train` |
 | Smoke run length | 1,000 steps | `configs/act_pick_cube.yaml` |
 | M4 steps/s | not measured yet (estimate 0.7-1.5) | #79 |
 
@@ -40,6 +41,14 @@ pin as hw-setup, one version in the lock.
 **A real training run fits in a unit test.** With no pretrained backbone
 (that would download ResNet-18 weights), a tiny transformer and a 16-frame
 image dataset, 4 steps on CPU take about 2.4 s, so the test runs by default.
+It uses images, not video, so video decoding is first exercised by the
+smoke run. Here torchcodec cannot load (no FFmpeg libraries) and LeRobot
+decodes with pyav; `dataset.json` records the backend, and the measured
+steps/s should be reported with it.
+
+**`HF_HUB_OFFLINE` covers the Hub, not torchvision.** `lerobot-train` runs
+offline, but a real run still downloads the ResNet-18 weights from
+download.pytorch.org the first time.
 
 ## 2026-10-23 · Teleop now caps each follower move and checks the arms match first
 
