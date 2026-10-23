@@ -127,7 +127,7 @@ arm's. Afterwards open `configs/local.yaml` and check the two ports differ.
 | `no port disappeared; is it plugged in?` | The cable you pulled was not the arm's, or the arm was not connected. Plug both in and run again. |
 | `more than one port disappeared` | Something else was unplugged at the same time. Unplug only the named arm. |
 | `did not come back after replug` | Plug the cable into the same USB socket as before. The port name depends on the socket. |
-| `no configs/example.yaml found above the current directory` | Run from inside the workspace. |
+| `no workspace root found` | The tool is not installed from a checkout of the workspace. Pass `--config` and `--example`. |
 
 Cameras are not found by this step. Edit the `cameras:` block of
 `configs/local.yaml` by hand (indices 0 and 1 in the example). Step 5 lists

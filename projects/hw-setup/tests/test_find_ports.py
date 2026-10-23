@@ -1,10 +1,12 @@
 import os
+import stat
 from pathlib import Path
 
 import pytest
 import yaml
 
 from hw_setup.find_ports import FindPortsError, find_ports, main
+from hw_setup.workspace import WorkspaceError
 from so101 import ArmRole, load_machine_config
 
 REPO = Path(__file__).resolve().parents[3]
@@ -218,30 +220,99 @@ def _workspace(tmp_path: Path) -> Path:
     root = tmp_path / "ws"
     (root / "configs").mkdir(parents=True)
     (root / "configs" / "example.yaml").write_text(EXAMPLE.read_text())
-    (root / "projects" / "hw-setup").mkdir(parents=True)
+    (root / "hardware" / "calibration").mkdir(parents=True)
     return root
 
 
-def test_default_config_is_the_workspace_one_even_from_a_subdirectory(
+def test_default_config_is_the_injected_workspace_from_any_cwd(
     tmp_path, monkeypatch, capsys
 ):
     root = _workspace(tmp_path)
-    monkeypatch.chdir(root / "projects" / "hw-setup")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
     board = _board()
-    code = main([], lister=board.lister, input_fn=board.input, sleep=lambda _s: None)
+    code = main(
+        [],
+        lister=board.lister,
+        input_fn=board.input,
+        sleep=lambda _s: None,
+        root=root,
+    )
     assert code == 0
     target = (root / "configs" / "local.yaml").resolve()
     assert load_machine_config(target).arms[ArmRole.LEADER].port == LEADER
-    assert not (root / "projects" / "hw-setup" / "configs").exists()
+    assert not (elsewhere / "configs").exists()
     assert str(target) in capsys.readouterr().out
 
 
 def test_dry_run_prints_absolute_workspace_path(tmp_path, monkeypatch, capsys):
     root = _workspace(tmp_path)
-    monkeypatch.chdir(root / "projects" / "hw-setup")
-    main(["--dry-run"])
+    monkeypatch.chdir(tmp_path)
+    main(["--dry-run"], root=root)
     assert str((root / "configs" / "local.yaml").resolve()) in capsys.readouterr().out
     assert not (root / "configs" / "local.yaml").exists()
+
+
+def test_default_root_is_the_shared_finder_not_the_cwd(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)  # no workspace here, and none above
+    assert main(["--dry-run"]) == 0
+    assert str(REPO / "configs" / "local.yaml") in capsys.readouterr().out
+
+
+def test_config_and_example_overrides_need_no_root(tmp_path, monkeypatch):
+    def no_root():
+        raise AssertionError("root must not be looked up")
+
+    monkeypatch.setattr("hw_setup.find_ports.find_workspace_root", no_root)
+    config = tmp_path / "local.yaml"
+    main(["--dry-run", "--config", str(config), "--example", str(EXAMPLE)])
+
+
+def test_missing_root_is_a_one_line_error(tmp_path, monkeypatch, capsys):
+    def no_root():
+        raise WorkspaceError("no workspace root found")
+
+    monkeypatch.setattr("hw_setup.find_ports.find_workspace_root", no_root)
+    assert main(["--dry-run"]) == 1
+    err = capsys.readouterr().err
+    assert "no workspace root found" in err and "--config" in err
+
+
+def test_existing_file_mode_is_kept_on_rewrite(tmp_path):
+    config = _local(tmp_path)
+    config.chmod(0o640)
+    board = _board()
+    main(
+        ["--config", str(config)],
+        lister=board.lister,
+        input_fn=board.input,
+        sleep=lambda _s: None,
+    )
+    assert stat.S_IMODE(config.stat().st_mode) == 0o640
+
+
+def test_new_file_gets_the_umask_default_not_0600(tmp_path):
+    config = tmp_path / "local.yaml"
+    board = _board()
+    old = os.umask(0o022)
+    try:
+        main(
+            ["--config", str(config), "--example", str(EXAMPLE)],
+            lister=board.lister,
+            input_fn=board.input,
+            sleep=lambda _s: None,
+        )
+    finally:
+        os.umask(old)
+    assert stat.S_IMODE(config.stat().st_mode) == 0o644
+
+
+def test_same_port_is_reported_before_the_second_replug():
+    board = FakeBoard([LEADER, None, LEADER])  # same arm unplugged twice
+    with pytest.raises(FindPortsError, match="same port"):
+        find_ports(board.lister, board.input, sleep=lambda _s: None)
+    assert len(board.prompts) == 3  # no replug prompt for the follower
 
 
 def test_write_is_atomic(tmp_path, monkeypatch):

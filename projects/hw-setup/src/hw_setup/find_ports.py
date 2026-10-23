@@ -14,6 +14,7 @@ On macOS pyserial lists ``/dev/cu.usbmodem*``; LeRobot accepts either the
 import argparse
 import contextlib
 import os
+import stat
 import sys
 import tempfile
 import time
@@ -22,6 +23,7 @@ from pathlib import Path
 
 import yaml
 
+from hw_setup.workspace import WorkspaceError, find_workspace_root
 from so101 import ArmRole, MachineConfigError
 from so101.machine_config import parse_machine_config
 
@@ -72,6 +74,11 @@ def find_ports(
                 f"{role.value}: more than one port disappeared ({', '.join(gone)})"
             )
         port = gone[0]
+        if port in found.values():
+            raise FindPortsError(
+                f"{role.value}: {port} is the same port as the other arm; "
+                "unplug the other arm's cable this time"
+            )
         input_fn(f"Plug the {role.value} arm back in, then press Enter. ")
         for _ in range(SETTLE_TRIES):
             sleep(SETTLE_SECONDS)
@@ -83,8 +90,6 @@ def find_ports(
                 "cable into the same USB socket: the port name depends on the socket."
             )
         found[role] = port
-    if len(set(found.values())) != len(found):
-        raise FindPortsError(f"both arms gave the same port: {found}")
     return found
 
 
@@ -98,15 +103,6 @@ def merge_ports(data: object, ports: dict[ArmRole, str]) -> dict:
             raise FindPortsError(f"arms.{role.value} is not a mapping")
         arm["port"] = port
     return data
-
-
-def find_workspace_root(start: Path | None = None) -> Path | None:
-    """Nearest folder at or above ``start`` with ``configs/example.yaml``."""
-    here = (start or Path.cwd()).resolve()
-    for parent in (here, *here.parents):
-        if (parent / "configs" / "example.yaml").is_file():
-            return parent
-    return None
 
 
 def _read_base(config: Path, example: Path) -> tuple[object, bool]:
@@ -136,9 +132,18 @@ def _dry_run(config: Path, example: Path) -> None:
 def _write_atomic(path: Path, text: str) -> None:
     """Write via a temp file in the same folder, then replace."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    # mkstemp makes the file 0600. Keep the old file's mode; a new file gets
+    # the mode open() would give it (0666 minus the umask, so 0644 usually).
+    if path.exists():
+        mode = stat.S_IMODE(path.stat().st_mode)
+    else:
+        umask = os.umask(0)
+        os.umask(umask)
+        mode = 0o666 & ~umask
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(fd, "w") as handle:
+            os.fchmod(handle.fileno(), mode)
             handle.write(text)
         os.replace(tmp, path)
     except BaseException:
@@ -152,7 +157,9 @@ def main(
     lister: PortLister = list_serial_ports,
     input_fn: InputFn = input,
     sleep: SleepFn = time.sleep,
+    root: Path | None = None,
 ) -> int:
+    """Run the tool. ``root`` is the workspace root; None finds it from this file."""
     parser = argparse.ArgumentParser(
         prog="so101-find-ports",
         description="Find each arm's serial port and write it to configs/local.yaml.",
@@ -167,11 +174,11 @@ def main(
     args = parser.parse_args(argv)
     config, example = args.config, args.example
     if config is None or example is None:
-        root = find_workspace_root()
-        if root is None:
+        try:
+            root = root if root is not None else find_workspace_root()
+        except WorkspaceError as err:
             print(
-                "error: no configs/example.yaml found above the current directory; "
-                "run from inside the workspace or pass --config and --example",
+                f"error: {err}; pass --config and --example to name the files",
                 file=sys.stderr,
             )
             return 1

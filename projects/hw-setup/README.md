@@ -20,10 +20,10 @@ any import or install error.
 - Done: `so101-teleop` (calibration-gated teleoperation, `--dry-run`).
 - Done: `so101-record` (local datasets only, resume, `--dry-run`);
   `lerobot[feetech,dataset]` installed.
-- Doing: nothing.
 - Done: `so101-find-ports` (tested with fakes; not yet run on hardware).
 - Done: `so101-calibrate` (tested with fakes; not yet run on hardware).
 - Done: `so101-doctor` (read-only preflight, tested with fakes).
+- Doing: nothing.
 - Next: set motor IDs (needs hardware).
 
 ## Find the ports
@@ -39,8 +39,9 @@ pyserial, which does not open them. It then writes `arms.leader.port` and
 `arms.follower.port` to `configs/local.yaml` (created from
 `configs/example.yaml` if missing), keeps the other keys, and refuses to write
 a file that fails `so101.machine_config`. Comments in an existing
-`local.yaml` are not kept. With no `--config` it uses `<workspace root>/configs/local.yaml`, found by
-looking upward for `configs/example.yaml`, so it works from any subfolder.
+`local.yaml` are not kept; its file mode is. With no `--config` it uses
+`<workspace root>/configs/local.yaml`. The root is found by walking up from
+the package file (`hw_setup.workspace`), so it works from any directory.
 If an arm does not come back after the replug, plug it into the same USB
 socket: the macOS port name depends on the socket.
 
