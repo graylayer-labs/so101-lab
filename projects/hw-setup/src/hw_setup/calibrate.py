@@ -290,8 +290,9 @@ def main(
         backup.unlink()
         print(
             "Calibration file unchanged: the existing file was kept (no 'c' at "
-            "LeRobot's prompt), so the identical backup was removed. To "
-            "recalibrate, run again and type 'c'."
+            "LeRobot's prompt) and LeRobot wrote the stored file to the "
+            "motors, so the identical backup was removed. If the arm was "
+            "reassembled, recalibrate: run again and type 'c'."
         )
         return 0
 

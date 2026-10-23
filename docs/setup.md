@@ -333,7 +333,8 @@ file's offsets and limits to the motors ("Writing calibration file associated
 with the id main to the motors"). After a reassembly or a servo swap those
 values are stale, and pressing ENTER by mistake pushes them onto the motors.
 After a reassembly, type `c`. If you press ENTER instead, the script says
-"Calibration file unchanged", removes the identical backup and exits 0.
+"Calibration file unchanged" (and that LeRobot wrote the stored file to the
+motors), removes the identical backup and exits 0.
 
 After `c` (or with no file yet), LeRobot's prompts are, in order (quoted from
 `so_follower.py` and `so_leader.py` in lerobot 0.6.1):

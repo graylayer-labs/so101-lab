@@ -162,12 +162,14 @@ def test_failed_check_on_first_calibration_has_nothing_to_restore(root, capsys) 
 
 
 def test_keeping_the_existing_file_drops_the_identical_backup(root, capsys) -> None:
-    # Pressing ENTER at LeRobot's prompt keeps the file: LeRobot writes nothing.
+    # Pressing ENTER at LeRobot's prompt keeps the file, but LeRobot writes
+    # that stored file to the motors (so_follower.py L116-124), so say so.
     old = install(root, "follower_main.json")
     runner = FakeLeRobot(old, None)
     assert run(root, runner, "--role", "follower") == 0
     out = capsys.readouterr().out
     assert "unchanged" in out
+    assert "wrote the stored file to the motors" in out
     assert not backup_path(old, NOW).exists()
 
 
