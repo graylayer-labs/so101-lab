@@ -16,6 +16,7 @@ import pytest
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.act.configuration_act import ACTConfig
 
+from act_policy import train
 from act_policy.train import (
     DATASET_RECORD,
     DEFAULT_RUN_CONFIG,
@@ -293,6 +294,26 @@ def test_dataset_record_is_read_from_local_files(
     assert list(record["cameras"]) == [CAMERA]
     assert record["cameras"][CAMERA]["shape"] == [32, 32, 3]
     json.dumps(record)
+
+
+def test_lerobot_train_runs_with_the_hub_offline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With meta/ complete but data/ missing, lerobot-train would still try
+    the Hub (datasets/lerobot_dataset.py L272-278, L643-675)."""
+    seen: dict = {}
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(argv, 5)
+
+    monkeypatch.setenv("SO101_TEST_MARKER", "kept")
+    monkeypatch.setattr(train.subprocess, "run", fake_run)
+    assert train._run(["lerobot-train"]) == 5
+    env = seen["env"]
+    assert isinstance(env, dict)
+    assert env["HF_HUB_OFFLINE"] == "1"
+    assert env["SO101_TEST_MARKER"] == "kept"
 
 
 def test_the_network_guard_works() -> None:

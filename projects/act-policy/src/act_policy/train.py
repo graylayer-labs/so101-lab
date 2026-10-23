@@ -15,7 +15,8 @@ draccus parser and run its ``validate()``.
   (configs/default.py L82); passing it makes the command say what it does.
 - ``--dataset.repo_id`` is required (default.py L31); ``--dataset.root``
   is always passed, resolved (default.py L37). With a root the repo_id is
-  only a name, and nothing is looked up on the Hub.
+  only a name. lerobot-train still tries the Hub if ``data/`` or
+  ``videos/`` is missing, so it runs with ``HF_HUB_OFFLINE=1``.
 - ``--policy.device``: LeRobot picks cuda, then mps, then xpu, then cpu when
   it is unset, and silently falls back when the one asked for is missing
   (policies.py L86-89, utils/device_utils.py L22-35). Here the default is
@@ -42,6 +43,7 @@ metadata is refused first, because LeRobot would otherwise download
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -221,7 +223,16 @@ def read_dataset_record(repo_id: str, dataset_root: Path) -> dict[str, Any]:
 
 
 def _run(argv: list[str]) -> int:
-    return subprocess.run(argv, check=False).returncode
+    """Run ``argv`` with the Hub offline (``HF_HUB_OFFLINE=1``).
+
+    With ``meta/`` complete but ``data/`` or ``videos/`` missing,
+    lerobot-train would still look the dataset up on the Hub
+    (datasets/lerobot_dataset.py L272-278, L643-675). Offline, it fails
+    instead. The ResNet-18 backbone weights come from download.pytorch.org,
+    which this does not block.
+    """
+    env = {**os.environ, "HF_HUB_OFFLINE": "1"}
+    return subprocess.run(argv, check=False, env=env).returncode
 
 
 def _repo_id(text: str) -> str:
