@@ -12,7 +12,9 @@ Every command caps how far the follower moves per update
 5 % of the calibrated range for the gripper. It is the value used on the real
 arms on 2026-10-22. At LeRobot's default 60 Hz teleop loop (30 Hz when
 recording) it still allows 300 (150) degrees per second, faster than the arm
-is moved by hand, so normal teleop is not slowed; what it stops is a single
+is moved by hand. With any cap set, LeRobot also reads the follower's present
+position on every update (so_follower.py L221-226, "Slower fps expected"), so
+the loop may run below that rate; what the cap stops is a single
 update jumping the full distance to a far-away leader pose. ``--max-step
 none`` passes ``null`` and prints a warning.
 

@@ -227,7 +227,11 @@ gripper.
 Why 5: it is the value used on the real arms on 2026-10-22. It is a cap per
 update, not a speed limit: at LeRobot's 60 Hz teleop loop (30 Hz when
 recording) 5 per update still allows 300 (150) degrees per second, faster
-than you move the leader by hand, so teleop does not lag. What it stops is a
+than you move the leader by hand. One cost: with any cap set, LeRobot reads
+the follower's present position on every update before it writes the goal
+(`so_follower.py` L221-226, "Slower fps expected"), so the loop may run
+below 60 Hz and the cap then allows proportionally less per second. This
+has not been measured on the arms. What it stops is a
 single update jumping the whole way to a distant leader pose; a 98 degree gap
 is still crossed in about 20 updates, a third of a second, so the alignment
 check below is what prevents the jump. `0`, negative numbers, `nan` and `inf`
@@ -242,8 +246,9 @@ uv run so101-teleop --align-max 8      # allow a larger gap
 uv run so101-teleop --skip-align       # no check; prints a WARNING
 ```
 
-Before `so101-teleop` or `so101-record` builds its command, it connects to
-both arms read-only, reads each joint's calibrated position and compares
+After `so101-teleop` or `so101-record` has passed its other checks and built
+its command, and before it runs it, the check connects to both arms
+read-only, reads each joint's calibrated position and compares
 leader with follower. If any joint differs by more than `--align-max`
 (default 5), it prints a table like this on stderr and exits 1, with how to
 fix it: pose the arms the same, or recalibrate with `so101-calibrate`.
