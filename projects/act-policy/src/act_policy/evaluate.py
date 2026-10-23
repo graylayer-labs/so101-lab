@@ -175,9 +175,9 @@ def _stop_after_ctrl_c(proc: subprocess.Popen[str], lines: list[str]) -> None:
     second signal, on which it force-exits (utils/process.py L85-99) and
     may cut short the drive back to the start pose. So the signal is
     forwarded only if LeRobot has not logged that it got one
-    (``Shutdown signal ... received``, L89) within ``SHUTDOWN_GRACE_S``.
+    (``Shutdown signal ... received``, L89) anywhere in its output by
+    ``SHUTDOWN_GRACE_S`` after ours.
     """
-    seen = len(lines)
     print(
         f"\n{PROG}: Ctrl-C: waiting for lerobot-rollout to stop and return the "
         f"follower to its start pose (up to {STOP_WAIT_S:.0f} s). Watch the arm.",
@@ -185,7 +185,9 @@ def _stop_after_ctrl_c(proc: subprocess.Popen[str], lines: list[str]) -> None:
     )
     if _wait(proc, SHUTDOWN_GRACE_S):
         return
-    if not any(SHUTDOWN_LOG in line for line in lines[seen:]):
+    # Any shutdown log so far, even one teed before our own Ctrl-C arrived,
+    # means one more signal would be LeRobot's second.
+    if not any(SHUTDOWN_LOG in line for line in lines):
         print(f"{PROG}: forwarded Ctrl-C to lerobot-rollout.", file=sys.stderr)
         proc.send_signal(signal.SIGINT)
     if _wait(proc, STOP_WAIT_S):

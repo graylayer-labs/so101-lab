@@ -495,20 +495,44 @@ def handler(signum, frame):
         logging.info("Force shutdown")
         sys.exit(1)
 signal.signal(signal.SIGINT, handler)
+signal.signal(signal.SIGTERM, handler)
 print("rollout running", flush=True)
 time.sleep(0.3)
 for pid in TARGETS:
     os.kill(pid, signal.SIGINT)
+    time.sleep(GAP)
 while count == 0:
     time.sleep(0.01)
+AFTER
+print("done", flush=True)
+"""
+# LeRobot's own lines, copied: rollout/strategies/core.py L127 and L134.
+RETURN_LINE = "INFO Returning robot to initial position before shutdown..."
+DISCONNECT_LINE = "INFO Disconnecting robot..."
+RETURN_1S = """
 print("returning to start pose", flush=True)
 time.sleep(1.0)
-print("done", flush=True)
 """
 
 
-def graceful_child(targets: str) -> list[str]:
-    return [sys.executable, "-c", GRACEFUL_CHILD.replace("TARGETS", targets)]
+def graceful_child(targets: str, gap: float = 0.0, after: str = RETURN_1S) -> list[str]:
+    code = (
+        GRACEFUL_CHILD.replace("TARGETS", targets)
+        .replace("GAP", str(gap))
+        .replace("AFTER", after)
+    )
+    return [sys.executable, "-c", code]
+
+
+def test_ctrl_c_is_not_forwarded_when_lerobot_logged_it_first(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    # The child gets the signal and logs it before the parent is
+    # interrupted, so the log line is already teed when so101-eval looks.
+    result = run_teed(graceful_child("(os.getpid(), os.getppid())", gap=0.3))
+    assert result.interrupted is True
+    assert result.code == 0  # a forwarded second SIGINT would force status 1
+    assert "forwarded" not in capfd.readouterr().err
 
 
 def test_ctrl_c_waits_for_lerobot_to_finish_and_does_not_signal_twice(
