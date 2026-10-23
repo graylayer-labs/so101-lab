@@ -497,3 +497,75 @@ def test_max_step_that_is_not_positive_is_refused(
         run([*BASE, "--max-step", bad], root, home, runner)
     assert exit_info.value.code == 2
     assert runner.calls == []
+
+
+# --- alignment check (#64) -------------------------------------------------
+
+
+def refuse_to_connect(config: object, root: Path) -> dict:
+    raise AssertionError("the alignment check must not connect here")
+
+
+def test_misaligned_arms_refuse_to_record(
+    root: Path, home: Path, fake_arms, capsys: pytest.CaptureFixture[str]
+) -> None:
+    factory, _ = fake_arms(follower={"wrist_roll": -98.0})
+    runner = Runner()
+    code = main(
+        BASE, runner=runner, root=root, lerobot_home=home, device_factory=factory
+    )
+    assert code == 1
+    assert runner.calls == []
+    err = capsys.readouterr().err
+    assert "wrist_roll" in err and "so101-calibrate" in err
+
+
+def test_aligned_arms_record(root: Path, home: Path, fake_arms) -> None:
+    factory, _ = fake_arms()
+    runner = Runner()
+    code = main(
+        BASE, runner=runner, root=root, lerobot_home=home, device_factory=factory
+    )
+    assert code == 0
+    assert len(runner.calls) == 1
+
+
+def test_skip_align_warns_and_records(
+    root: Path, home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runner = Runner()
+    code = main(
+        [*BASE, "--skip-align"],
+        runner=runner,
+        root=root,
+        lerobot_home=home,
+        device_factory=refuse_to_connect,
+    )
+    assert code == 0
+    assert "WARNING" in capsys.readouterr().err
+
+
+def test_dry_run_does_not_connect(
+    root: Path, home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(
+        [*BASE, "--dry-run"],
+        runner=Runner(),
+        root=root,
+        lerobot_home=home,
+        device_factory=refuse_to_connect,
+    )
+    assert code == 0
+    assert "Alignment check: would run" in capsys.readouterr().out
+
+
+def test_dataset_problems_refuse_before_connecting(root: Path, home: Path) -> None:
+    (home / "me" / "cube").mkdir(parents=True)
+    code = main(
+        BASE,
+        runner=Runner(),
+        root=root,
+        lerobot_home=home,
+        device_factory=refuse_to_connect,
+    )
+    assert code == 1
