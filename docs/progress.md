@@ -2,6 +2,15 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-23 · Moving a gripper span bound by one now fails a test
+
+The calibration check rejects a gripper span outside 300 to 2500. Its fail
+fixtures sat at 250 and 3000, so a bound could move without a test noticing.
+Two new fixtures, at widths 299 and 2501, trip only the `gripper_span` check.
+On a scratch copy, six changes to `GRIPPER_SPAN` each failed a test:
+`(301, 2500)`, `(300, 2499)`, `(260, 2500)`, `(300, 2600)`, `(299, 2500)` and
+`(300, 2501)`. Tests only; nothing under `src/` changed (#45).
+
 ## 2026-10-22 · Every arm bring-up step is now one tested command, with a runbook
 
 The SO-101 arms can now be taken from the box to a first recorded dataset by
