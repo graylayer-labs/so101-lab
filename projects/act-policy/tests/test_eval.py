@@ -1,20 +1,23 @@
 """``so101-eval`` end to end, with a fake runner and fake answers.
 
-The fake runner stands in for ``subprocess.run(argv)`` on ``lerobot-rollout``
-and leaves on disk what one episodic rollout of one episode leaves: the
-dataset metadata LeRobot reads back on ``--resume`` (the files
-``hw_setup.record.missing_metadata`` checks), with ``total_episodes``
-counting up. No robot, camera or policy is run.
+The fake runner stands in for ``evaluate.run_teed(argv)`` on
+``lerobot-rollout``: it returns the exit code and the output lines, and
+leaves on disk what one episodic rollout of one episode leaves: the dataset
+metadata LeRobot reads back on ``--resume`` (the files
+``hw_setup.record.missing_metadata`` checks), with ``total_episodes`` and
+``total_frames`` counting up. Its output lines are LeRobot's own format
+(the ``slow_line`` fixture). No robot, camera or policy is run.
 """
 
 import json
-from collections.abc import Callable, Iterator
+import sys
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 import pytest
 
 from act_policy import evaluate
-from act_policy.evaluate import main
+from act_policy.evaluate import RunResult, main, run_teed
 
 MakePolicy = Callable[..., Path]
 TASK = "Pick the cube and place it in the bin"
@@ -41,18 +44,27 @@ def no_input(prompt: str = "") -> str:
 class FakeRollout:
     """Records each argv; writes the dataset metadata one episode leaves."""
 
-    def __init__(self, code: int = 0, saves: bool = True) -> None:
+    def __init__(
+        self,
+        code: int = 0,
+        saves: bool = True,
+        frames: int = 900,
+        output: Sequence[Sequence[str]] = (),
+    ) -> None:
         self.calls: list[list[str]] = []
         self.code = code
         self.saves = saves
+        self.frames = frames
+        self.output = list(output)  # one list of lines per call
 
-    def __call__(self, argv: list[str]) -> int:
+    def __call__(self, argv: list[str]) -> RunResult:
         self.calls.append(argv)
         root = Path(flag(argv, "--dataset.root"))
         info_path = root / "meta" / "info.json"
         info = json.loads(info_path.read_text()) if info_path.is_file() else {}
         if self.saves:
             info["total_episodes"] = info.get("total_episodes", 0) + 1
+            info["total_frames"] = info.get("total_frames", 0) + self.frames
             info["total_tasks"] = 1
             episodes = root / "meta" / "episodes" / "chunk-000"
             episodes.mkdir(parents=True, exist_ok=True)
@@ -60,7 +72,9 @@ class FakeRollout:
             (root / "meta" / "tasks.parquet").write_bytes(b"PAR1")
         info_path.parent.mkdir(parents=True, exist_ok=True)
         info_path.write_text(json.dumps(info))
-        return self.code
+        index = len(self.calls) - 1
+        lines = list(self.output[index]) if index < len(self.output) else []
+        return RunResult(self.code, lines)
 
 
 def flag(argv: list[str], name: str) -> str:
@@ -91,8 +105,12 @@ def base_args(policy: Path, episodes: int = 1) -> list[str]:
     return ["--policy", str(policy), "--task", TASK, "--episodes", str(episodes)]
 
 
+def trials_file(workspace: Path) -> Path:
+    return workspace / "outputs" / "eval" / "act_pick_cube" / "trials.jsonl"
+
+
 def read_trials(workspace: Path) -> list[dict]:
-    path = workspace / "outputs" / "eval" / "act_pick_cube" / "trials.jsonl"
+    path = trials_file(workspace)
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
@@ -330,7 +348,9 @@ def test_a_failed_rollout_stops_without_a_trial_row(
     args = base_args(make_policy(), 2)
     assert run(workspace, lerobot_home, args, runner=runner, ask=ask) == 3
     assert len(runner.calls) == 1
-    assert not (workspace / "outputs" / "eval").exists()
+    assert not (
+        workspace / "outputs" / "eval" / "act_pick_cube" / "trials.jsonl"
+    ).exists()
 
 
 def test_an_episode_that_was_not_saved_has_no_index(
@@ -368,7 +388,68 @@ def test_ctrl_d_at_a_prompt_stops_cleanly(
     args = base_args(make_policy(), 3)
     assert run(workspace, lerobot_home, args, runner=runner, ask=ask) == 1
     assert len(runner.calls) == 1
-    assert not (workspace / "outputs" / "eval").exists()
+    assert not (
+        workspace / "outputs" / "eval" / "act_pick_cube" / "trials.jsonl"
+    ).exists()
+
+
+# --- control rate --------------------------------------------------------
+
+
+def test_the_control_rate_is_logged_per_trial(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    slow_line: Callable[..., str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Trial 1: every one of 300 steps late at 15 Hz. Trial 2: none late.
+    runner = FakeRollout(frames=300, output=[[slow_line(15.0)] * 300, ["INFO ok"]])
+    ask = Answers("y", "n", "2", "", "", "y", "y", "", "")
+    args = base_args(make_policy(), 2)
+    assert run(workspace, lerobot_home, args, runner=runner, ask=ask) == 0
+    first, second = read_trials(workspace)
+    assert first["control_hz"] == pytest.approx(15.0)
+    assert first["slow_steps"] == 300
+    assert first["slowest_step_hz"] == 15.0
+    assert first["frames"] == 300
+    assert second["control_hz"] == pytest.approx(30.0)
+    assert second["slow_steps"] == 0
+    assert second["slowest_step_hz"] is None
+    captured = capsys.readouterr()
+    assert captured.err.count("below 25 Hz") == 1
+    assert "trial 1 ran at 15.0 Hz" in captured.err
+    assert "Control rate: 15.0 Hz" in captured.out
+    assert "Control rate: 30.0 Hz" in captured.out
+
+
+def test_the_rollout_output_is_kept_per_trial(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    slow_line: Callable[..., str],
+) -> None:
+    runner = FakeRollout(output=[["INFO a", slow_line(20.0)]])
+    ask = Answers("y", "y", "", "")
+    assert (
+        run(workspace, lerobot_home, base_args(make_policy()), runner=runner, ask=ask)
+        == 0
+    )
+    log = workspace / "outputs" / "eval" / "act_pick_cube" / "logs" / "trial-001.log"
+    assert log.read_text().splitlines() == ["INFO a", slow_line(20.0)]
+    (trial,) = read_trials(workspace)
+    assert trial["rollout_log"] == str(log)
+
+
+def test_run_teed_shows_and_returns_the_output(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    code = "import sys; print('to out'); print('to err', file=sys.stderr); sys.exit(3)"
+    result = run_teed([sys.executable, "-c", code])
+    assert result.code == 3
+    assert sorted(result.lines) == ["to err", "to out"]
+    out = capfd.readouterr().out
+    assert "to out" in out and "to err" in out
 
 
 def test_cli_is_wired() -> None:

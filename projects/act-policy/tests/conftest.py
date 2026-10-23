@@ -180,6 +180,33 @@ def make_policy(tmp_path: Path) -> MakePolicy:
     return make
 
 
+def _slow_line(hz: float, fps: float = 30.0) -> str:
+    """A late-step warning exactly as LeRobot 0.6.1 prints it.
+
+    Message: rollout/strategies/episodic.py L249-254, copied. Prefix: the
+    ``LeRobotFormatter`` of utils/utils.py L63-72, ``%(levelname)s
+    %(asctime)s %(lerobot_location)15s %(message)s``, the location being the
+    last 15 characters of ``<path>:<line>``. ``fps`` is ``RolloutConfig.fps``,
+    a float (rollout/configs.py L240), so it prints as ``30.0``.
+    """
+    return (
+        "WARNING 2026-11-02 14:30:05 episodic.py:249 "
+        f"Record loop is running slower ({hz:.1f} Hz) than the target FPS "
+        f"({fps} Hz). Dataset frames might be dropped and robot control might "
+        "be unstable. Common causes are: 1) Camera FPS not keeping up 2) Policy "
+        "inference taking too long 3) CPU starvation"
+    )
+
+
+SlowLine = Callable[..., str]
+
+
+@pytest.fixture
+def slow_line() -> SlowLine:
+    """``slow_line(hz, fps=30.0)``: one of LeRobot's late-step log lines."""
+    return _slow_line
+
+
 @pytest.fixture
 def lerobot_home(tmp_path: Path) -> Path:
     """Stands in for ``$HF_LEROBOT_HOME``, outside the workspace."""

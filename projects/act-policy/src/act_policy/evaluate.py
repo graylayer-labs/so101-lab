@@ -30,18 +30,27 @@ follower is at its rest pose before it starts.
 ``--dataset.push_to_hub=false`` is always passed and the movement cap
 (``--max-step``, default ``hw_setup.teleop.DEFAULT_MAX_STEP``) always named.
 ``--dry-run`` prints the plan and the exact command, and runs nothing.
+
+The rollout's output is teed: shown on the terminal as it comes and kept,
+per trial, in ``outputs/eval/<run>/logs/trial-<n>.log``. From it and the
+episode's frame count, ``act_policy.control_rate`` measures the control
+rate, which goes into trials.jsonl; below 25 Hz a warning is printed, as
+#76 asks for the rate to be noted with the result.
 """
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from act_policy.control_rate import LOW_HZ, ControlRate, measure
 from act_policy.policy_check import (
     Policy,
     PolicyError,
@@ -78,7 +87,16 @@ PROG = "so101-eval"
 REPO_OWNER = "local"
 _REPO_ID = re.compile(r"[^/\s]+/[^/\s]+")
 
-Runner = Callable[[list[str]], int]
+LOGS_DIR = "logs"
+
+
+@dataclass(frozen=True)
+class RunResult:
+    code: int
+    lines: list[str]  # stdout and stderr, merged, without line endings
+
+
+Runner = Callable[[list[str]], RunResult]
 
 MPS_WARNING = (
     "WARNING: running the policy on mps. A published SO-101 ACT eval measured "
@@ -97,8 +115,33 @@ START_POSE_WARNING = (
 )
 
 
-def _run(argv: list[str]) -> int:
-    return subprocess.run(argv, check=False).returncode
+def run_teed(argv: list[str]) -> RunResult:
+    """Run ``argv``, copying its output to our stdout line by line, and keep it.
+
+    stderr is merged into stdout: LeRobot logs to stderr (a
+    ``logging.StreamHandler`` with no stream, utils/utils.py L85-88).
+    ``PYTHONUNBUFFERED`` keeps the child's lines from waiting in a pipe
+    buffer. stdin is left alone, so the keyboard controls still work: LeRobot
+    reads keys with pynput's global listener or, on macOS without
+    Accessibility permission, from stdin when it is a TTY
+    (utils/keyboard_input.py L24-27, L269-275).
+    """
+    env = os.environ | {"PYTHONUNBUFFERED": "1"}
+    lines: list[str] = []
+    with subprocess.Popen(
+        argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        env=env,
+    ) as proc:
+        assert proc.stdout is not None  # stdout=PIPE
+        for line in proc.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            lines.append(line.rstrip("\r\n"))
+    return RunResult(proc.returncode, lines)
 
 
 def _text(text: str) -> str:
@@ -203,12 +246,31 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _episodes_in(dataset_root: Path) -> int:
-    """``total_episodes`` in the dataset's ``meta/info.json``; 0 if unreadable."""
+def _counts(dataset_root: Path) -> tuple[int, int | None]:
+    """``(total_episodes, total_frames)`` from ``meta/info.json``.
+
+    ``(0, 0)`` when there is no dataset yet; frames None if unreadable.
+    """
+    path = dataset_root / INFO_FILE
+    if not path.is_file():
+        return 0, 0
     try:
-        return int(json.loads((dataset_root / INFO_FILE).read_text())["total_episodes"])
+        info = json.loads(path.read_text())
+        return int(info["total_episodes"]), int(info["total_frames"])
     except (OSError, ValueError, KeyError, TypeError):
-        return 0
+        return 0, None
+
+
+def _describe_rate(rate: ControlRate) -> str:
+    late = f"{rate.slow_steps} late steps"
+    if rate.slowest_step_hz is not None:
+        late += f", slowest {rate.slowest_step_hz:.1f} Hz"
+    if rate.hz is None:
+        return f"Control rate: unknown (no frame count; {late})"
+    return (
+        f"Control rate: {rate.hz:.1f} Hz over {rate.frames} frames "
+        f"(target {rate.target_fps} fps; {late})"
+    )
 
 
 def _refuse(problem: str) -> int:
@@ -257,7 +319,7 @@ def _print_plan(
 def main(
     argv: Sequence[str] | None = None,
     *,
-    runner: Runner = _run,
+    runner: Runner = run_teed,
     root: Path | None = None,
     lerobot_home: Path | None = None,
     ask: Ask = input,
@@ -348,6 +410,7 @@ def main(
         "dataset_root": str(dataset_root),
     }
     scored: list[bool] = []
+    rates: list[float | None] = []
     for i in range(args.episodes):
         resume = args.resume or i > 0
         if resume:
@@ -366,16 +429,32 @@ def main(
         if answer.strip().lower() != "y":
             print("Stopped before the trial; nothing was run.")
             break
-        before = _episodes_in(dataset_root)
-        code = runner(command(resume))
-        if code != 0:
+        episodes_before, frames_before = _counts(dataset_root)
+        result = runner(command(resume))
+        rollout_log = log.parent / LOGS_DIR / f"trial-{trial:03d}.log"
+        rollout_log.parent.mkdir(parents=True, exist_ok=True)
+        rollout_log.write_text("".join(f"{line}\n" for line in result.lines))
+        if result.code != 0:
             print(
-                f"{PROG}: lerobot-rollout exited with {code}; trial {trial} "
-                "is not scored. Stopping.",
+                f"{PROG}: lerobot-rollout exited with {result.code}; trial "
+                f"{trial} is not scored. Stopping. Output: {rollout_log}",
                 file=sys.stderr,
             )
-            return code
-        after = _episodes_in(dataset_root)
+            return result.code
+        after, frames_after = _counts(dataset_root)
+        saved = after > episodes_before
+        frames = None
+        if saved and frames_before is not None and frames_after is not None:
+            frames = frames_after - frames_before
+        rate = measure(result.lines, frames=frames, fps=policy.dataset_fps)
+        print(_describe_rate(rate))
+        if rate.low:
+            print(
+                f"{PROG}: WARNING: trial {trial} ran at {rate.hz:.1f} Hz, below "
+                f"{LOW_HZ:.0f} Hz. Note it with the result (#76); #82 asks for "
+                "one diagnostic rerun with --device cpu or without --display.",
+                file=sys.stderr,
+            )
         try:
             score = ask_score(ask)
         except EOFError:
@@ -386,14 +465,26 @@ def main(
         record = trial_record(
             score,
             trial=trial,
-            episode_index=after - 1 if after > before else None,
+            episode_index=after - 1 if saved else None,
             now=now(),
-            context=context,
+            context=context
+            | {
+                "control_hz": rate.hz,
+                "frames": rate.frames,
+                "slow_steps": rate.slow_steps,
+                "slowest_step_hz": rate.slowest_step_hz,
+                "rollout_log": str(rollout_log),
+            },
         )
         append_trial(log, record)
         scored.append(score.success)
+        rates.append(rate.hz)
         print(f"Trial {trial} logged to {log}")
-    print(f"This session: {sum(scored)}/{len(scored)} succeeded. Log: {log}")
+    measured = ", ".join("?" if hz is None else f"{hz:.1f}" for hz in rates)
+    print(
+        f"This session: {sum(scored)}/{len(scored)} succeeded; control rate per "
+        f"trial (Hz): {measured or '-'}. Log: {log}"
+    )
     return 0
 
 
