@@ -2,6 +2,16 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-23 · so101-find-ports works from any directory and keeps file modes
+
+`so101-find-ports` now finds the workspace with the same helper as the other
+commands (`hw_setup.workspace.find_workspace_root`), so it no longer fails
+from `~` or `/tmp`. Rewriting `configs/local.yaml` keeps its file mode instead
+of leaving it at 0600, and a new file gets 0644 (or the umask default). Using
+the same arm for both ports is now reported as soon as the second port is
+known, not after both rounds. The hw-setup README status block lists the Done
+lines together (#50).
+
 ## 2026-10-23 · Odd calibration files get a one-line refusal with the right reason
 
 `so101-teleop` no longer shows a traceback for an unreadable calibration file
