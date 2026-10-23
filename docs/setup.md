@@ -594,7 +594,7 @@ policy and its training dataset (names, size, fps); the device; and the
 dataset-root rules of Step 7. It never pushes to the Hub.
 
 ```bash
-uv run so101-eval --policy <policy> --task "Pick the cube and place it in the bin" --episodes 10 --episode-time-s 30 --dry-run
+uv run so101-eval --policy <policy> --task "Pick the cube and place it in the bin" --episodes 10 --dry-run
 ```
 
 ```text
@@ -608,6 +608,7 @@ Teleop: none; after each trial LeRobot returns the follower to its start pose
 Dataset: local/rollout_act_pick_cube_20261101 (new dataset)
 Dataset root: <home>/local/rollout_act_pick_cube_20261101
 Task: Pick the cube and place it in the bin
+Time limit: 30.0 s per trial
 Trials: 10 (one lerobot-rollout each; trials after the first add --resume=true)
 Push to Hub: no
 Movement cap: 5.0 per update (degrees for body joints, % of range for the gripper)

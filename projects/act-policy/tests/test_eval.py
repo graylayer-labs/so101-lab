@@ -545,3 +545,20 @@ def test_ctrl_c_at_a_prompt_exits_without_a_traceback(
 
 def test_cli_is_wired() -> None:
     assert callable(evaluate.cli)
+
+
+def test_the_time_limit_defaults_to_the_76_protocol(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    policy = make_policy()
+    run(workspace, lerobot_home, [*base_args(policy), "--dry-run"])
+    out = capsys.readouterr().out
+    assert "--dataset.episode_time_s=30.0" in out
+    assert "Time limit: 30.0 s per trial" in out
+    ask = Answers("y", "y", "", "")
+    assert run(workspace, lerobot_home, base_args(policy), ask=ask) == 0
+    (trial,) = read_trials(workspace)
+    assert trial["episode_time_s"] == 30.0

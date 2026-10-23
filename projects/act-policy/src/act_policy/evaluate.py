@@ -103,6 +103,7 @@ class RunResult:
 SHUTDOWN_LOG = "Shutdown signal"  # LeRobot's log on a signal, utils/process.py L89
 SHUTDOWN_GRACE_S = 1.0
 STOP_WAIT_S = 60.0
+PROTOCOL_EPISODE_TIME_S = 30.0  # "a time limit of 30 s" (#76 eval protocol)
 INTERRUPTED = 130  # the shell's exit status for Ctrl-C
 
 
@@ -313,7 +314,13 @@ def _parser() -> argparse.ArgumentParser:
         help="the dataset the policy was trained on "
         "(default: from the checkpoint's train_config.json)",
     )
-    parser.add_argument("--episode-time-s", type=_positive_float)
+    parser.add_argument(
+        "--episode-time-s",
+        type=_positive_float,
+        default=PROTOCOL_EPISODE_TIME_S,
+        help="time limit per trial, in seconds "
+        f"(default: {PROTOCOL_EPISODE_TIME_S:.0f}, the #76 protocol's)",
+    )
     parser.add_argument(
         "--reset-time-s",
         type=_positive_float,
@@ -397,6 +404,7 @@ def _print_plan(
     print(f"Dataset: {repo_id} ({'resume' if resume else 'new dataset'})")
     print(f"Dataset root: {dataset_root}")
     print(f"Task: {args.task}")
+    print(f"Time limit: {args.episode_time_s} s per trial")
     print(
         f"Trials: {args.episodes} (one lerobot-rollout each; "
         "trials after the first add --resume=true)"

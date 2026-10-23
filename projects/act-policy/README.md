@@ -68,8 +68,8 @@ uv run so101-train --repo-id local/so101_pick_cube_<stamp> --smoke
 ```bash
 uv run so101-eval --policy outputs/train/<run>/checkpoints/last/pretrained_model \
     --task "Pick the cube and place it in the bin" --episodes 10 \
-    --episode-time-s 30 --dry-run        # check everything, print the command
-uv run so101-eval --policy ... --task "..." --episodes 10 --episode-time-s 30
+    --dry-run                            # check everything, print the command
+uv run so101-eval --policy ... --task "..." --episodes 10
 uv run so101-eval --policy ... --task "..." --episodes 5 --resume   # more trials
 ```
 
@@ -129,7 +129,8 @@ to note it with the result (#76) and do one diagnostic rerun with
 
 `--dataset.push_to_hub=false` is always passed. `--max-step` caps each
 follower move as in `so101-teleop` (default 5). The fps is the training
-dataset's. Optional: `--repo-id`, `--dataset-root`, `--reset-time-s`
+dataset's. Each trial's time limit is `--episode-time-s`, by default #76's
+30 s. Optional: `--repo-id`, `--dataset-root`, `--reset-time-s`
 (after a left-arrow re-record), `--device`, `--display`, `--config`.
 
 The follower's start pose is not checked by a reading: the repo defines no
