@@ -24,6 +24,8 @@ any import or install error.
 - Done: `so101-calibrate` (tested with fakes; not yet run on hardware).
 - Done: `so101-doctor` (read-only preflight, tested with fakes).
 - Doing: nothing.
+- Done: movement cap (`--max-step`) and alignment check (`so101-align`,
+  gating teleop and record); tested with fakes, not yet run on the arms.
 - Next: set motor IDs (needs hardware).
 
 ## Find the ports
@@ -225,11 +227,64 @@ gripper.
 Why 5: it is the value used on the real arms on 2026-10-22. It is a cap per
 update, not a speed limit: at LeRobot's 60 Hz teleop loop (30 Hz when
 recording) 5 per update still allows 300 (150) degrees per second, faster
-than you move the leader by hand, so teleop does not lag. What it stops is a
+than you move the leader by hand. One cost: with any cap set, LeRobot reads
+the follower's present position on every update before it writes the goal
+(`so_follower.py` L221-226, "Slower fps expected"), so the loop may run
+below 60 Hz and the cap then allows proportionally less per second. This
+has not been measured on the arms. What it stops is a
 single update jumping the whole way to a distant leader pose; a 98 degree gap
 is still crossed in about 20 updates, a third of a second, so the alignment
 check below is what prevents the jump. `0`, negative numbers, `nan` and `inf`
 are refused before LeRobot starts. `so101-record` takes the same flag.
+
+### Alignment check
+
+```bash
+uv run so101-align --watch      # live table; pose the arms until every row is ok
+uv run so101-align              # print the table once
+uv run so101-teleop --align-max 8      # allow a larger gap
+uv run so101-teleop --skip-align       # no check; prints a WARNING
+```
+
+After `so101-teleop` or `so101-record` has passed its other checks and built
+its command, and before it runs it, the check connects to both arms
+read-only, reads each joint's calibrated position and compares
+leader with follower. If any joint differs by more than `--align-max`
+(default 5), it prints a table like this on stderr and exits 1, with how to
+fix it: pose the arms the same, or recalibrate with `so101-calibrate`.
+
+```text
+joint             leader  follower      diff   limit  status
+shoulder_pan        1.2°      0.8°     +0.4°    5.0°  ok
+shoulder_lift      -2.0°     -1.1°     -0.9°    5.0°  ok
+elbow_flex         12.3°      0.4°    +11.9°    5.0°  OVER
+wrist_flex          3.0°      2.2°     +0.8°    5.0°  ok
+wrist_roll         90.1°     -7.9°    +98.0°    5.0°  OVER
+gripper             2.0%      1.5%     +0.5%    5.0%  ok
+```
+
+(Example numbers, shaped like the 2026-10-22 run; not a real reading.)
+
+- Units are teleop's: degrees for the body joints, percent of the calibrated
+  range for the gripper. `--align-max` and `--max-step` use the same units.
+- `diff` is leader minus follower, where the follower would move. It is not
+  wrapped at ±180°: the follower's wrist_roll is a position servo over the
+  raw 0-4095 range, so +179° to -179° is a 358° turn, not 2°.
+- Read-only: it does not call LeRobot's `connect()`, which writes motor
+  settings and, on the follower, re-enables torque even with
+  `calibrate=False`. It builds LeRobot's own follower and leader from the
+  same argv `so101-teleop` runs, opens their motor buses, and only reads
+  (`Present_Position`, and the calibration registers). No goal is written,
+  torque is never changed, and both ports are closed in a `finally`, also on
+  error, with `disable_torque=False`. The `align` module docstring cites the
+  LeRobot lines.
+- If an arm's motors hold a different calibration from its file, the check
+  fails for that arm: LeRobot would write the file to the motors at connect,
+  which shifts every reading.
+- `--dry-run` does not connect; it says the check would run.
+- `so101-align` writes `outputs/hw/alignment-<UTC time>.json` (gitignored)
+  with the last reading. `--watch` refreshes every 0.5 s until Ctrl-C. Exit 0
+  when the last reading is within `--align-max`, else 1.
 
 ## Record a dataset
 
@@ -271,7 +326,9 @@ check runs first, also with `--dry-run`. Then:
   evaluation). Resuming an existing `eval_` dataset is allowed, as in LeRobot.
 - `--episode-time-s`, `--reset-time-s` and `--fps` are passed only when
   given (LeRobot's defaults: 60 s, 60 s, 30 fps). `--no-cameras`,
-  `--display`, `--max-step` and `--config PATH` work as in `so101-teleop`.
+  `--display`, `--max-step`, `--align-max`, `--skip-align` and
+  `--config PATH` work as in `so101-teleop`. The alignment check runs after
+  every other check.
 
 ## Layout
 

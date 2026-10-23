@@ -12,9 +12,17 @@ Every command caps how far the follower moves per update
 5 % of the calibrated range for the gripper. It is the value used on the real
 arms on 2026-10-22. At LeRobot's default 60 Hz teleop loop (30 Hz when
 recording) it still allows 300 (150) degrees per second, faster than the arm
-is moved by hand, so normal teleop is not slowed; what it stops is a single
+is moved by hand. With any cap set, LeRobot also reads the follower's present
+position on every update (so_follower.py L221-226, "Slower fps expected"), so
+the loop may run below that rate; what the cap stops is a single
 update jumping the full distance to a far-away leader pose. ``--max-step
 none`` passes ``null`` and prints a warning.
+
+Then, unless ``--skip-align`` (which warns), ``hw_setup.align`` connects
+both arms read-only and refuses with exit 1 and a per-joint table when any
+joint differs by more than ``--align-max`` (default 5: degrees for body
+joints, % of range for the gripper). ``--dry-run`` does not connect; it says
+the check would run.
 """
 
 import argparse
@@ -24,6 +32,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from hw_setup import align
 from hw_setup.lerobot_argv import CALIBRATION_ROOT, format_command, teleoperate_argv
 from hw_setup.workspace import WorkspaceError, find_workspace_root, load_local_config
 from so101.arm import ArmRole
@@ -126,8 +135,11 @@ def _parser() -> argparse.ArgumentParser:
         "--display", action="store_true", help="show the data live (--display_data)"
     )
     add_max_step_argument(parser)
+    align.add_align_arguments(parser)
     parser.add_argument(
-        "--dry-run", action="store_true", help="check calibrations, print the command"
+        "--dry-run",
+        action="store_true",
+        help="check calibrations, print the command; does not connect to the arms",
     )
     parser.add_argument(
         "--config", type=Path, help="machine config (default: configs/local.yaml)"
@@ -140,6 +152,7 @@ def main(
     *,
     runner: Runner = _run,
     root: Path | None = None,
+    device_factory: align.DeviceFactory | None = None,
 ) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -162,6 +175,17 @@ def main(
         return 1
 
     print("Calibration checked: leader and follower pass.")
+    refused = align.alignment_gate(
+        config,
+        workspace,
+        limit=args.align_max,
+        skip=args.skip_align,
+        dry_run=args.dry_run,
+        prog="so101-teleop",
+        device_factory=device_factory,
+    )
+    if refused is not None:
+        return refused
     print(describe_max_step(args.max_step, "so101-teleop"))
     print(f"Command: {format_command(command)}")
     if args.dry_run:

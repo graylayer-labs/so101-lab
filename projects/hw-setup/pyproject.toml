@@ -18,6 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
+so101-align = "hw_setup.align:cli"
 so101-calibrate = "hw_setup.calibrate:cli"
 so101-doctor = "hw_setup.doctor:cli"
 so101-find-ports = "hw_setup.find_ports:main"

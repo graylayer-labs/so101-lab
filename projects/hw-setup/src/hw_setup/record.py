@@ -31,6 +31,8 @@ calibration gate runs first, also under ``--dry-run``. Then:
   set it aside; nothing is deleted.
 - ``--robot.max_relative_target`` is always passed, from ``--max-step``
   (default 5.0), as in ``so101-teleop``.
+- The alignment check of ``so101-teleop`` (``hw_setup.align``) runs after
+  every other check, with the same ``--align-max`` and ``--skip-align``.
 - A new dataset whose name starts with ``eval_`` is refused, as LeRobot does
   when it creates one (scripts/lerobot_record.py L431-436). Resume has no
   such check there, so an ``eval_`` dataset can be resumed.
@@ -46,6 +48,7 @@ from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
 
+from hw_setup import align
 from hw_setup.lerobot_argv import format_command, record_argv
 from hw_setup.teleop import (
     add_max_step_argument,
@@ -148,8 +151,11 @@ def _parser() -> argparse.ArgumentParser:
         "--display", action="store_true", help="show the data live (--display_data)"
     )
     add_max_step_argument(parser)
+    align.add_align_arguments(parser)
     parser.add_argument(
-        "--dry-run", action="store_true", help="run the checks, print the command"
+        "--dry-run",
+        action="store_true",
+        help="run the checks, print the command; does not connect to the arms",
     )
     parser.add_argument(
         "--config", type=Path, help="machine config (default: configs/local.yaml)"
@@ -227,6 +233,7 @@ def main(
     runner: Runner = _run,
     root: Path | None = None,
     lerobot_home: Path | None = None,
+    device_factory: align.DeviceFactory | None = None,
 ) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -275,6 +282,17 @@ def main(
 
     mode = "resume, adding episodes" if args.resume else "new dataset"
     print("Calibration checked: leader and follower pass.")
+    refused = align.alignment_gate(
+        config,
+        workspace,
+        limit=args.align_max,
+        skip=args.skip_align,
+        dry_run=args.dry_run,
+        prog=PROG,
+        device_factory=device_factory,
+    )
+    if refused is not None:
+        return refused
     print(f"Dataset: {args.repo_id} ({mode})")
     print(f"Dataset root: {dataset_root}")
     print(f"Task: {args.task}")

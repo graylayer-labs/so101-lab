@@ -444,6 +444,12 @@ a servo moves under power.
 the problem on stderr and exits 1, also with `--dry-run`. It does not check
 that the ports are present: run Step 5 first.
 
+**Alignment check:** then it connects to both arms read-only and refuses
+(exit 1, with a per-joint table) if any joint of the leader and follower
+differs by more than `--align-max` (default 5 degrees, or 5 % of range for
+the gripper). It sends no goal and does not change torque. `--dry-run` does
+not connect. `--skip-align` skips it with a warning.
+
 **Movement cap:** every command passes `--robot.max_relative_target`
 (`--max-step`, default 5: at most 5 degrees per update for the body joints
 and 5 % of range for the gripper). `--max-step none` removes it and prints a
@@ -453,12 +459,27 @@ Our advice, not from the upstream guide: before the first run, hold the
 leader near the pose the follower is in, clear the area around the follower,
 and keep a hand on the power supply.
 
+First pose the arms the same. With both arms powered and plugged in:
+
+```bash
+uv run so101-align --watch
+```
+
+Move the leader (and the follower by hand, if its torque is off, as it is
+after a LeRobot command exits; this check never changes it) until every row
+of the table says `ok`, then press Ctrl-C. The last reading is saved to
+`outputs/hw/alignment-<UTC time>.json`. If one joint stays `OVER` although
+the arms look the same (on 2026-10-22: elbow_flex 10-13°, wrist_roll about
+98° until the wrist was twisted), the two calibrations disagree: recalibrate
+that arm with Step 4 and check again.
+
 ```bash
 uv run so101-teleop --dry-run
 ```
 
 ```text
 Calibration checked: leader and follower pass.
+Alignment check: would run (connect both arms read-only, refuse if any joint differs by more than 5.0); not run under --dry-run.
 Movement cap: 5.0 per update (degrees for body joints, % of range for the gripper)
 Command: lerobot-teleoperate --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower '--robot.cameras={front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}' --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem0000000001 --teleop.id=main --teleop.calibration_dir=<root>/hardware/calibration/leader --robot.max_relative_target=5.0
 Dry run: nothing was run.
@@ -482,6 +503,9 @@ Our advice, not from the upstream guide: try `--no-cameras` first, so a camera p
 | `refusing to run: ... calibration is not valid JSON`, or a sanity-check message | Run Step 4 for that arm. |
 | `machine config not found` | No `configs/local.yaml`. Run Step 1. |
 | LeRobot cannot open a port, or the follower does not move | Run `so101-doctor` (Step 5), then check the supply and cables. |
+| `refusing to run: leader and follower disagree (<joints>)` and a table | Run `so101-align --watch` and pose the arms until every row is `ok`. If a joint stays `OVER` in the same pose, recalibrate that arm (Step 4). |
+| `refusing to run: could not read the arms: ...` | A port or motor did not answer. Run `so101-doctor` (Step 5) and check power and cables. |
+| A table line `the motors hold a different calibration from ...` | The motors and the file disagree. Recalibrate that arm (Step 4). |
 
 Example of the calibration gate (a config with `id: spare`, no such files,
 exit 1):
@@ -518,6 +542,7 @@ uv run so101-record --task "Pick up the red cube" --repo-id me/cube --episodes 1
 
 ```text
 Calibration checked: leader and follower pass.
+Alignment check: would run (connect both arms read-only, refuse if any joint differs by more than 5.0); not run under --dry-run.
 Dataset: me/cube (new dataset)
 Dataset root: <home>/.cache/huggingface/lerobot/me/cube
 Task: Pick up the red cube

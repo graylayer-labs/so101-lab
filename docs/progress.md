@@ -2,6 +2,45 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-23 · Teleop now caps each follower move and checks the arms match first
+
+On 2026-10-22 the follower lurched towards the leader at the start of
+teleop: the two arms read about 10-13° apart at elbow_flex and about 98° at
+wrist_roll. `so101-teleop` and `so101-record` now refuse to start until every
+joint of the two arms is within 5°, and every command they build caps each
+follower move at 5° per update. `so101-align --watch` shows the gap live
+while you pose the arms. Both are tested with fakes only; neither has run on
+the real arms yet.
+
+| Claim | Number | Where |
+|---|---|---|
+| Default movement cap | 5 per update (degrees; % of range for the gripper) | `--max-step`, `hw_setup/teleop.py` |
+| Default alignment limit | 5 (same units) | `--align-max`, `hw_setup/align.py` |
+| Writes to either arm during the check, in tests | 0 | `tests/test_align.py` |
+| Verified on the real arms | not yet | #64 |
+
+### What was tried, and what we learned
+
+**LeRobot's `connect()` is not read-only, even with `calibrate=False`.** The
+follower's `connect` always runs `configure()`, which writes motor settings
+inside a "torque disabled" block that turns torque back on when it ends. So
+the check never calls it. It builds LeRobot's own follower and leader from
+the same command line `so101-teleop` runs, then only uses their motor buses
+to read positions, and closes the ports without touching torque.
+
+**The cap alone does not stop the jump.** `max_relative_target` limits each
+update, not the speed: at 60 updates a second, 5° per update is still 300°
+per second, so a 98° gap is crossed in a third of a second. That is why the
+alignment check is the real guard, and the cap is the backstop.
+
+**The wrist difference is not wrapped at ±180°.** The follower's wrist is a
+position servo over its full raw range, so +179° to -179° is a 358° turn.
+Wrapping would have called it 2° and let it through.
+
+**The test fake is LeRobot's real bus with only the serial layer
+replaced**, so readings come back through LeRobot's own conversion to
+degrees. An earlier bug hid behind a fake that returned the wrong shape.
+
 ## 2026-10-23 · so101-find-ports works from any directory and keeps file modes
 
 `so101-find-ports` now finds the workspace with the same helper as the other

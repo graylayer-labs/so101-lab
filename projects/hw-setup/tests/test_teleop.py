@@ -240,3 +240,84 @@ def test_dry_run_names_the_cap(root: Path, capsys: pytest.CaptureFixture[str]) -
     main(["--dry-run"], runner=Runner(), root=root)
     out = capsys.readouterr().out
     assert "Movement cap: 5.0 per update" in out
+
+
+# --- alignment check (#64) -------------------------------------------------
+
+
+def refuse_to_connect(config: object, root: Path) -> dict:
+    raise AssertionError("the alignment check must not connect here")
+
+
+def test_alignment_check_runs_before_the_command(
+    root: Path, fake_arms, capsys: pytest.CaptureFixture[str]
+) -> None:
+    factory, devices = fake_arms()
+    runner = Runner()
+    assert main([], runner=runner, root=root, device_factory=factory) == 0
+    assert len(runner.calls) == 1
+    assert "Alignment checked" in capsys.readouterr().out
+    assert all(not d.bus.is_connected and d.bus.writes == [] for d in devices.values())
+
+
+def test_misaligned_arms_refuse_with_a_table_and_a_fix(
+    root: Path, fake_arms, capsys: pytest.CaptureFixture[str]
+) -> None:
+    factory, _ = fake_arms(leader={"elbow_flex": 12.0, "wrist_roll": 90.0})
+    runner = Runner()
+    assert main([], runner=runner, root=root, device_factory=factory) == 1
+    assert runner.calls == []
+    err = capsys.readouterr().err
+    assert "elbow_flex" in err and "wrist_roll" in err and "OVER" in err
+    assert "pose the arms" in err and "so101-calibrate" in err
+
+
+def test_align_max_changes_the_threshold(root: Path, fake_arms) -> None:
+    factory, _ = fake_arms(leader={"elbow_flex": 12.0})
+    runner = Runner()
+    argv = ["--align-max", "15"]
+    assert main(argv, runner=runner, root=root, device_factory=factory) == 0
+    assert len(runner.calls) == 1
+
+
+@pytest.mark.parametrize("bad", ["0", "-1", "nan", "x"])
+def test_align_max_must_be_positive(root: Path, bad: str) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--align-max", bad], runner=Runner(), root=root)
+    assert exit_info.value.code == 2
+
+
+def test_skip_align_warns_and_does_not_connect(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runner = Runner()
+    argv = ["--skip-align"]
+    assert main(argv, runner=runner, root=root, device_factory=refuse_to_connect) == 0
+    assert len(runner.calls) == 1
+    assert "WARNING" in capsys.readouterr().err
+
+
+def test_dry_run_does_not_connect_and_says_the_check_would_run(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    argv = ["--dry-run"]
+    assert main(argv, runner=Runner(), root=root, device_factory=refuse_to_connect) == 0
+    assert "Alignment check: would run" in capsys.readouterr().out
+
+
+def test_unreadable_arms_refuse(
+    root: Path, fake_arms, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from so101.arm import ArmRole
+
+    factory, devices = fake_arms(open_ok={ArmRole.FOLLOWER: False})
+    runner = Runner()
+    assert main([], runner=runner, root=root, device_factory=factory) == 1
+    assert runner.calls == []
+    assert "could not read the arms" in capsys.readouterr().err
+    assert not any(d.bus.is_connected for d in devices.values())
+
+
+def test_bad_calibration_refuses_before_connecting(root: Path) -> None:
+    delete(calib(root, "leader"))
+    assert main([], runner=Runner(), root=root, device_factory=refuse_to_connect) == 1
