@@ -632,7 +632,10 @@ For real:
 4. Score it at the prompts: `y`/`n` against #76's success definition, the
    furthest stage for a fail (`0 none`, `1 reach`, `2 grasp`, `3 lift`,
    `4 over the bin`, `5 released in the bin`), the start position and a
-   note. Each trial is saved to `outputs/eval/<run>/trials.jsonl` at once.
+   note. Each trial is saved to `outputs/eval/<run>/trials.jsonl` at once,
+   with the control rate measured from LeRobot's output (`Control rate:
+   ... Hz` is printed; under 25 Hz there is a warning to note it with the
+   result).
 
 To add trials later, run the same command with `--resume`.
 

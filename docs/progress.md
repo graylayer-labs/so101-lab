@@ -8,9 +8,10 @@ Newest first. One entry per merged task or chunk.
 `lerobot-rollout`, one episode per trial. Before the arm moves it checks the
 follower's calibration, the checkpoint, and that the cameras match what the
 policy was trained on in name, size and fps. After each trial it asks for a
-score and appends it to `outputs/eval/<run>/trials.jsonl`. It is tested with
-fakes only; no policy has run on the arm yet, and the control rate on the Mac
-is not yet measured (#81).
+score, against #76's success definition and stages, and appends it to
+`outputs/eval/<run>/trials.jsonl` with the control rate measured from
+LeRobot's own output. It is tested with fakes only; no policy has run on the
+arm yet, so no real control rate has been measured (#81).
 
 | Claim | Number | Where |
 |---|---|---|
@@ -18,6 +19,7 @@ is not yet measured (#81).
 | Push to the Hub | always off | `act_policy/rollout_argv.py` |
 | Camera checks | names, width x height, fps | `act_policy/policy_check.py` |
 | Default movement cap | 5 per update | `--max-step`, as `so101-teleop` |
+| Control rate warning | below 25 Hz | `act_policy/control_rate.py` |
 | Verified on the real arm | not yet | #81, #82 |
 
 ### What was tried, and what we learned
@@ -41,6 +43,13 @@ the policy and its training dataset's `meta/info.json`.
 only way to score each episode as it ends is to run one episode at a time,
 resuming the same eval dataset. The cost is loading the model again for each
 trial.
+
+**LeRobot only prints the late control steps.** Each late step logs its own
+rate, `Record loop is running slower (14.8 Hz) ...`, and skips its sleep;
+every other step sleeps to exactly `1/fps`. So the late lines plus the
+episode's frame count give the mean rate without changing LeRobot. The
+wrapper tees the output to the terminal, keeps it per trial, and writes the
+rate into each trial's line.
 
 **A policy type has to be registered before LeRobot can read its config.**
 The tests passed, because the fixture imports `ACTConfig`, while the real

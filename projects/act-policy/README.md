@@ -91,7 +91,9 @@ Each score is appended at once to `outputs/eval/<run>/trials.jsonl`, one
 JSON object per line: `trial`, `episode_index`, `time_utc`, `success`,
 `stage`, `start_position`, `notes`, then the run's settings (`policy`,
 `checkpoint`, `task`, `device`, `fps`, `episode_time_s`,
-`max_relative_target`, `dataset_repo_id`, `dataset_root`). `<run>` is the
+`max_relative_target`, `dataset_repo_id`, `dataset_root`), then the
+measured control rate (`control_hz`, `frames`, `slow_steps`,
+`slowest_step_hz`) and `rollout_log`, the trial's saved output. `<run>` is the
 training run's folder name, the one above `checkpoints/`. The eval videos go
 to a local LeRobot dataset, `$HF_LEROBOT_HOME/local/rollout_<run>` by
 default; the first trial creates it and later ones add to it.
@@ -109,11 +111,21 @@ Checks before anything runs, also with `--dry-run`; any failure exits 1:
 - The device is available. `--device auto` (the default) picks cuda, then
   mps, then cpu. On mps a warning gives the control-rate risk: a published
   SO-101 ACT eval ran at about 15 Hz on an M4 with 40% success, against
-  30 Hz and 90% on CUDA for the same checkpoint. LeRobot logs `Record loop is running slower` when it misses the
-  target fps; below about 25 Hz, note it with the trials (#82).
+  30 Hz and 90% on CUDA for the same checkpoint.
 - The dataset root follows `so101-record`'s rules: outside the workspace,
   new unless `--resume`, never half-written. Names must start with
   `rollout_` (LeRobot refuses others, but only after the robot connects).
+
+**Control rate.** The rollout's output is shown as it runs and also saved to
+`outputs/eval/<run>/logs/trial-<n>.log`. LeRobot prints one line for each
+late control step, `Record loop is running slower (<hz> Hz) than the target
+FPS (<fps> Hz)` (`lerobot/rollout/strategies/episodic.py` L249-254), and
+nothing for the others, which take exactly `1/fps`. With the episode's frame
+count from the eval dataset, that gives the mean rate:
+`frames / (sum of 1/hz over late steps + other steps / fps)`. It is printed
+after each trial and written as `control_hz`. Below 25 Hz a warning asks you
+to note it with the result (#76) and do one diagnostic rerun with
+`--device cpu` or without `--display` (#82).
 
 `--dataset.push_to_hub=false` is always passed. `--max-step` caps each
 follower move as in `so101-teleop` (default 5). The fps is the training
