@@ -46,7 +46,8 @@ trial.
 
 **LeRobot only prints the late control steps.** Each late step logs its own
 rate, `Record loop is running slower (14.8 Hz) ...`, and skips its sleep;
-every other step sleeps to exactly `1/fps`. So the late lines plus the
+every other step sleeps to about `1/fps` (the little work after the
+sleep is not counted). So the late lines plus the
 episode's frame count give the mean rate without changing LeRobot. The
 wrapper tees the output to the terminal, keeps it per trial, and writes the
 rate into each trial's line.

@@ -589,7 +589,7 @@ score each trial. The leader is not used. Full rules: the
 
 **Checks before the follower moves**, also with `--dry-run`: the follower's
 calibration; the checkpoint folder (`config.json`, `model.safetensors`,
-`train_config.json`); the cameras in `configs/local.yaml` against the
+`train_config.json` and the two `policy_*processor.json` files); the cameras in `configs/local.yaml` against the
 policy and its training dataset (names, size, fps); the device; and the
 dataset-root rules of Step 7. It never pushes to the Hub.
 
@@ -598,22 +598,22 @@ uv run so101-eval --policy <policy> --task "Pick the cube and place it in the bi
 ```
 
 ```text
-so101-eval: WARNING: running the policy on mps. A published SO-101 ACT eval measured about 15 Hz on an Apple M4 with mps and 40% success, against 30 Hz and 90% on CUDA for the same checkpoint. LeRobot logs 'Record loop is running slower' whenever a step misses the target fps. If the loop runs below about 25 Hz, write the rate down with the trials and rerun one diagnostic with --device cpu or without --display.
+so101-eval: WARNING: running the policy on mps. A published SO-101 ACT eval measured about 15 Hz on an Apple M4 with mps and 40% success, against 30 Hz and 90% on CUDA for the same checkpoint. LeRobot logs 'Record loop is running slower' whenever a step misses the target fps. If the loop runs below about 25 Hz, write the rate down with the trials and rerun one diagnostic with --device cpu or without --display. The movement cap (--max-step) also costs rate: it adds a bus read of the follower's position on every step. It is a safety limit, so keep it, but say it was on when you compare rates.
 Calibration checked: follower passes (the leader is not used).
 Policy: <policy> (act, checkpoint last)
 Trained on: local/pick_cube at <datasets>/pick_cube
 Cameras checked: front 640x480, wrist 640x480 at 30 fps match
 Device: mps
 Teleop: none; after each trial LeRobot returns the follower to its start pose
-Dataset: local/rollout_act_pick_cube_20261101 (new dataset)
-Dataset root: <home>/local/rollout_act_pick_cube_20261101
+Dataset: local/rollout_act_pick_cube_20261101_last (new dataset)
+Dataset root: <home>/local/rollout_act_pick_cube_20261101_last
 Task: Pick the cube and place it in the bin
 Time limit: 30.0 s per trial
 Trials: 10 (one lerobot-rollout each; trials after the first add --resume=true)
 Push to Hub: no
 Movement cap: 5.0 per update (degrees for body joints, % of range for the gripper)
-Trial log: <root>/outputs/eval/act_pick_cube_20261101/trials.jsonl
-Command: lerobot-rollout --strategy.type=episodic --policy.path=<policy> --policy.device=mps --device=mps --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower '--robot.cameras={front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}' --robot.max_relative_target=5.0 --dataset.repo_id=local/rollout_act_pick_cube_20261101 '--dataset.single_task=Pick the cube and place it in the bin' --dataset.root=<home>/local/rollout_act_pick_cube_20261101 --dataset.num_episodes=1 --dataset.fps=30 --dataset.push_to_hub=false --dataset.no_stamp=true --dataset.episode_time_s=30.0 --fps=30 --display_data=false
+Trial log: <root>/outputs/eval/act_pick_cube_20261101/last/trials.jsonl
+Command: lerobot-rollout --strategy.type=episodic --policy.path=<policy> --policy.device=mps --device=mps --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower '--robot.cameras={front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}' --robot.max_relative_target=5.0 --dataset.repo_id=local/rollout_act_pick_cube_20261101_last '--dataset.single_task=Pick the cube and place it in the bin' --dataset.root=<home>/local/rollout_act_pick_cube_20261101_last --dataset.num_episodes=1 --dataset.fps=30 --dataset.push_to_hub=false --dataset.no_stamp=true --dataset.episode_time_s=30.0 --fps=30 --display_data=false
 Start pose: not checked; each trial asks for y first.
 Dry run: nothing was run.
 ```

@@ -120,7 +120,7 @@ Checks before anything runs, also with `--dry-run`; any failure exits 1:
 `outputs/eval/<run>/<checkpoint>/logs/trial-<n>.log`. LeRobot prints one line for each
 late control step, `Record loop is running slower (<hz> Hz) than the target
 FPS (<fps> Hz)` (`lerobot/rollout/strategies/episodic.py` L249-254), and
-nothing for the others, which take exactly `1/fps`. With the episode's frame
+nothing for the others, which take about `1/fps`. With the episode's frame
 count from the eval dataset, that gives the mean rate:
 `frames / (sum of 1/hz over late steps + other steps / fps)`. It is printed
 after each trial and written as `control_hz`. Below 25 Hz a warning asks you
