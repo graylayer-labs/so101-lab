@@ -207,11 +207,18 @@ def test_lerobot_parses_the_command(tmp_path: Path) -> None:
     cfg.validate()  # what lerobot-train runs before training (train.py L226)
 
 
-def test_lerobot_parses_amp_on_cuda(tmp_path: Path) -> None:
+def test_lerobot_parses_amp_on_cuda(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pretend CUDA is here, or LeRobot would swap the device and, on mps,
+    # turn AMP off (configs/policies.py L86-96). Parsing touches no GPU.
+    import torch
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     cfg = parse(argv("cuda", output_dir=tmp_path / "out"))
-    # On a machine without CUDA, LeRobot falls back and turns AMP off
-    # (configs/policies.py L86-96); the flag itself must still parse.
     assert cfg.policy is not None
+    assert cfg.policy.device == "cuda"
+    assert cfg.policy.use_amp is True
 
 
 def test_lerobot_would_push_without_the_flag(tmp_path: Path) -> None:
