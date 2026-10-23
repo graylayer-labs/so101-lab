@@ -286,7 +286,7 @@ uv run so101-calibrate --role follower --dry-run
 Calibration file: <root>/hardware/calibration/follower/main.json
 Backup: <root>/hardware/calibration/follower/backups/main.20261022T205800Z.json.bak
 Command: lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower
-LeRobot will find the existing file and ask what to do: type 'c' and press ENTER to recalibrate; anything other than 'c' keeps the existing file.
+LeRobot will find the existing file and ask what to do: type 'c' and press ENTER to recalibrate; anything other than 'c' writes the stored calibration file to the motors.
 Dry run: nothing was backed up, moved, run or written.
 ```
 
@@ -300,7 +300,7 @@ uv run so101-calibrate --role leader --dry-run
 Calibration file: <root>/hardware/calibration/leader/main.json
 Backup: <root>/hardware/calibration/leader/backups/main.20261022T205800Z.json.bak
 Command: lerobot-calibrate --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem0000000001 --teleop.id=main --teleop.calibration_dir=<root>/hardware/calibration/leader
-LeRobot will find the existing file and ask what to do: type 'c' and press ENTER to recalibrate; anything other than 'c' keeps the existing file.
+LeRobot will find the existing file and ask what to do: type 'c' and press ENTER to recalibrate; anything other than 'c' writes the stored calibration file to the motors.
 Dry run: nothing was backed up, moved, run or written.
 ```
 

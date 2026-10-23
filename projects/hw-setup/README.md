@@ -64,8 +64,8 @@ It runs `lerobot-calibrate` for one arm (`--role leader` or `follower`) with
   reads `<id>.json`, and the `.bak` suffix keeps backups out of the CI check
   on every `*.json`. The `backups/` folders are gitignored.
 - When the file exists, LeRobot asks first: type `c` and press ENTER to
-  recalibrate. Anything other than `c` keeps the existing file; the script
-  then says the file is unchanged and removes the identical backup.
+  recalibrate. Anything other than `c` writes the stored file to the motors
+  and leaves the file as it was; the script then says the file is unchanged and removes the identical backup.
 - An existing file that cannot be loaded or fails the sanity checks is
   refused before LeRobot runs; the error says whether LeRobot itself would
   crash loading it. The error prints the `mv` command
