@@ -642,3 +642,16 @@ def test_resume_refuses_an_eval_dataset_with_other_cameras(
     assert run(workspace, lerobot_home, args) == 1
     err = capsys.readouterr().err
     assert "top" in err and "320x240" in err
+
+
+def test_calibration_and_policy_problems_are_reported_together(
+    workspace: Path,
+    lerobot_home: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (workspace / "hardware" / "calibration" / "follower" / "main.json").unlink()
+    args = [*base_args(tmp_path / "nope"), "--dry-run"]
+    assert run(workspace, lerobot_home, args) == 1
+    err = capsys.readouterr().err
+    assert "calibration missing" in err and "not a folder" in err

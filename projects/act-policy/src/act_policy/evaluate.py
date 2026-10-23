@@ -452,11 +452,17 @@ def main(
         config = load_local_config(workspace, args.config)
         problems = calibration_problems(config, workspace, roles=(ArmRole.FOLLOWER,))
         home = lerobot_home if lerobot_home is not None else default_lerobot_home()
-        policy = load_policy(
-            policy_path, train_dataset=args.train_dataset, lerobot_home=home
-        )
-        problems += camera_problems(config, policy)
-        if problems:
+        # Every problem found is named at once, so one rerun can fix them all.
+        try:
+            policy = load_policy(
+                policy_path, train_dataset=args.train_dataset, lerobot_home=home
+            )
+        except PolicyError as err:
+            problems.append(str(err))
+            policy = None
+        if policy is not None:
+            problems += camera_problems(config, policy)
+        if problems or policy is None:
             for problem in problems:
                 _refuse(problem)
             return 1
