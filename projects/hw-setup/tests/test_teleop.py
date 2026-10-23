@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from hw_setup.lerobot_argv import format_command, teleoperate_argv
-from hw_setup.teleop import main
+from hw_setup.teleop import calibration_problems, main
+from so101.arm import ArmRole
 from so101.machine_config import load_machine_config
 
 REPO = Path(__file__).parents[3]
@@ -166,6 +167,16 @@ def test_both_bad_arms_are_both_named(
     assert main([], runner=Runner(), root=root) == 1
     err = capsys.readouterr().err
     assert "leader" in err and "follower" in err
+
+
+def test_calibration_problems_can_check_the_follower_only(root: Path) -> None:
+    delete(calib(root, "leader"))
+    config = load_machine_config(root / "configs" / "local.yaml")
+    assert len(calibration_problems(config, root)) == 1
+    assert calibration_problems(config, root, roles=(ArmRole.FOLLOWER,)) == []
+    break_range(calib(root, "follower"))
+    (problem,) = calibration_problems(config, root, roles=(ArmRole.FOLLOWER,))
+    assert problem.startswith("follower arm (main):")
 
 
 def test_calibration_id_comes_from_the_config(root: Path) -> None:

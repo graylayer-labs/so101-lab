@@ -29,7 +29,7 @@ import argparse
 import math
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
 from hw_setup import align
@@ -94,10 +94,16 @@ def _run(argv: list[str]) -> int:
     return subprocess.run(argv, check=False).returncode
 
 
-def calibration_problems(config: MachineConfig, root: Path) -> list[str]:
-    """One message per arm whose calibration file is missing or invalid."""
+def calibration_problems(
+    config: MachineConfig, root: Path, roles: Iterable[ArmRole] = tuple(ArmRole)
+) -> list[str]:
+    """One message per arm in ``roles`` whose calibration is missing or invalid.
+
+    Both arms by default; ``so101-eval`` drives the follower alone and checks
+    only that one.
+    """
     problems = []
-    for role in ArmRole:
+    for role in roles:
         arm_id = config.arms[role].arm_id
         path = calibration_path(root / CALIBRATION_ROOT, role, arm_id)
         if not path.is_file():
