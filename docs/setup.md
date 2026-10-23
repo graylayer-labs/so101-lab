@@ -629,8 +629,9 @@ For real:
 2. Place the cube, then type `y` at the prompt.
 3. During the episode: right arrow ends it early, left arrow re-records it,
    Escape stops (use it for safety; score the trial as a fail).
-4. Score it at the prompts: `y`/`n`, the furthest stage for a fail
-   (`none`, `reach`, `grasp`, `place`, `release`), the start position and a
+4. Score it at the prompts: `y`/`n` against #76's success definition, the
+   furthest stage for a fail (`0 none`, `1 reach`, `2 grasp`, `3 lift`,
+   `4 over the bin`, `5 released in the bin`), the start position and a
    note. Each trial is saved to `outputs/eval/<run>/trials.jsonl` at once.
 
 To add trials later, run the same command with `--resume`.

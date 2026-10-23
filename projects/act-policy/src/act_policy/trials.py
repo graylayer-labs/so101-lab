@@ -1,10 +1,10 @@
 """Score each eval episode at a prompt and append it to ``trials.jsonl``.
 
-The fields follow the eval protocol for #82 (pre-registered in #76): pass or
-fail, the furthest stage reached, the start position and notes (the failure
-mode). A success means the cube ended in the bin and was released, within
-the time limit and with no human touch, so a success is always scored at
-the last stage, ``release``.
+The fields follow the eval protocol pre-registered in #76 and run in #82:
+pass or fail, the furthest stage reached, the start position and notes (the
+failure mode). The stage names and the success definition are #76's, word
+for word. A success always reaches the last stage, ``released in the bin``;
+a fail can too (a touch or an Escape is a fail whatever the cube did).
 
 The log is ``outputs/eval/<run>/trials.jsonl`` in the workspace (``outputs/``
 is gitignored): one JSON object per line, appended and flushed as soon as an
@@ -18,7 +18,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-STAGES = ("none", "reach", "grasp", "place", "release")
+# "Score each trial on stages (reach, grasp, lift, over the bin, released in
+# the bin)" (#76), with "none" first for a trial that reached none of them.
+STAGES = ("none", "reach", "grasp", "lift", "over the bin", "released in the bin")
+SUCCESS_DEFINITION = (
+    "the cube ends up inside the bin and released, within 30 s, with no human "
+    "touch, and the arm stops without hitting the bin or table hard enough to "
+    "move them"
+)
 EVAL_DIR = Path("outputs") / "eval"
 TRIALS_FILE = "trials.jsonl"
 
@@ -49,17 +56,16 @@ def ask_score(ask: Ask) -> Score:
     """
     success = _choose(
         ask,
-        "Success: cube released in the bin, no touch, in time? [y/n] ",
+        f"Success ({SUCCESS_DEFINITION})? [y/n] ",
         {"y": True, "n": False},
     )
     if success:
-        stage = "release"
+        stage = STAGES[-1]
     else:
-        stage = _choose(
-            ask,
-            f"Furthest stage reached [{'/'.join(STAGES)}]: ",
-            {s: s for s in STAGES},
-        )
+        menu = ", ".join(f"{i} {name}" for i, name in enumerate(STAGES))
+        choices = {name: name for name in STAGES}
+        choices |= {str(i): name for i, name in enumerate(STAGES)}
+        stage = _choose(ask, f"Furthest stage reached ({menu}): ", choices)
     start_position = ask("Start position (blank if none): ").strip()
     notes = ask("Notes or failure mode (blank if none): ").strip()
     return Score(success, stage, start_position, notes)

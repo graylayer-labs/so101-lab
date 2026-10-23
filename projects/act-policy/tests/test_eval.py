@@ -289,7 +289,7 @@ def test_each_trial_runs_one_episode_and_is_scored(
     assert [t["trial"] for t in trials] == [1, 2]
     assert [t["episode_index"] for t in trials] == [0, 1]
     assert [t["success"] for t in trials] == [False, True]
-    assert [t["stage"] for t in trials] == ["grasp", "release"]
+    assert [t["stage"] for t in trials] == ["grasp", "released in the bin"]
     assert [t["start_position"] for t in trials] == ["3", "1"]
     assert trials[0]["notes"] == "dropped it"
     assert trials[0]["policy"] == str(policy)

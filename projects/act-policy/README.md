@@ -79,9 +79,12 @@ teleop, and without one it drives the follower back to the pose it started
 in after the episode. Before every trial you type `y` to confirm the
 follower is at its rest pose; after it you score it:
 
-- success (cube released in the bin, no touch, within the time) or fail;
-- for a fail, the furthest stage reached: `none`, `reach`, `grasp`,
-  `place` or `release`;
+- success or fail, as defined in #76: success is "the cube ends up inside
+  the bin and released, within 30 s, with no human touch, and the arm stops
+  without hitting the bin or table hard enough to move them";
+- for a fail, the furthest of #76's stages reached, by number or name:
+  `0 none`, `1 reach`, `2 grasp`, `3 lift`, `4 over the bin`,
+  `5 released in the bin` (a success is always `released in the bin`);
 - the start position and a note on the failure mode, both optional.
 
 Each score is appended at once to `outputs/eval/<run>/trials.jsonl`, one
