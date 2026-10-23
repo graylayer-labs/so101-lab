@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "act-policy"
+version = "0.1.0"
+description = "Train and run an ACT policy on the SO-101 follower with LeRobot"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Eoin McAllister" }]
+dependencies = ["so101"]
+
+[tool.uv.sources]
+so101 = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/act_policy"]
