@@ -11,6 +11,7 @@ metadata LeRobot reads back on ``--resume`` (the files
 
 import json
 import shutil
+import subprocess
 import sys
 import time
 from collections.abc import Callable, Iterator, Sequence
@@ -741,3 +742,52 @@ def test_calibration_and_policy_problems_are_reported_together(
     assert run(workspace, lerobot_home, args) == 1
     err = capsys.readouterr().err
     assert "calibration missing" in err and "not a folder" in err
+
+
+class InterruptedProc:
+    """A Popen stand-in on which every call can be hit by a Ctrl-C.
+
+    ``poll``, ``wait`` and ``send_signal`` each raise KeyboardInterrupt the
+    first time; then the process "exits" on the next ``wait``.
+    """
+
+    def __init__(self) -> None:
+        self.returncode: int | None = None
+        self.raised: set[str] = set()
+        self.signals: list[int] = []
+
+    def _once(self, name: str) -> None:
+        if name not in self.raised:
+            self.raised.add(name)
+            raise KeyboardInterrupt
+
+    def poll(self) -> int | None:
+        self._once("poll")
+        return self.returncode
+
+    def wait(self, timeout: float | None = None) -> int:
+        self._once("wait")
+        if "send_signal" not in self.raised:
+            raise subprocess.TimeoutExpired("rollout", timeout or 0)
+        self.returncode = 0
+        return 0
+
+    def send_signal(self, sig: int) -> None:
+        self._once("send_signal")
+        self.signals.append(sig)
+
+    def terminate(self) -> None:
+        raise AssertionError("terminated")
+
+    def kill(self) -> None:
+        raise AssertionError("killed")
+
+
+def test_ctrl_c_anywhere_in_the_shutdown_wait_is_caught(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(evaluate, "SHUTDOWN_GRACE_S", 0.0)
+    proc = InterruptedProc()
+    evaluate._stop_after_ctrl_c(proc, [], [])
+    assert proc.raised == {"poll", "wait", "send_signal"}
+    assert proc.returncode == 0

@@ -43,6 +43,7 @@ rate, which goes into trials.jsonl; below 25 Hz a warning is printed, as
 """
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -55,7 +56,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, Protocol
 
 from act_policy.control_rate import LOW_HZ, ControlRate, measure
 from act_policy.policy_check import (
@@ -193,9 +194,17 @@ def _deadline(started: float, lines: list[str], times: list[float]) -> float:
     return max(started + STOP_WAIT_S, saving)
 
 
-def _stop_after_ctrl_c(
-    proc: subprocess.Popen[str], lines: list[str], times: list[float]
-) -> None:
+class _Child(Protocol):
+    """The parts of ``subprocess.Popen`` the shutdown wait uses."""
+
+    def poll(self) -> int | None: ...
+    def wait(self, timeout: float | None = None) -> int: ...
+    def send_signal(self, sig: int) -> None: ...
+    def terminate(self) -> None: ...
+    def kill(self) -> None: ...
+
+
+def _stop_after_ctrl_c(proc: _Child, lines: list[str], times: list[float]) -> None:
     """Let LeRobot finish its own clean shutdown after a Ctrl-C.
 
     After a signal, LeRobot 0.6.1 first saves the episode (encoding its
@@ -215,13 +224,16 @@ def _stop_after_ctrl_c(
     After that the child is only stopped (SIGTERM, then SIGKILL
     ``KILL_AFTER_S`` later) once it is past the deadline (``_deadline``) and
     never while it may be moving the arm back (``_returning``). A further
-    Ctrl-C anywhere in here is noted and the wait goes on.
+    Ctrl-C anywhere in here, the exit check included, is noted and the wait
+    goes on.
     """
     started = time.monotonic()
     announced = forwarded = False
     terminated_at: float | None = None
-    while proc.poll() is None:
+    while True:
         try:
+            if proc.poll() is not None:
+                break
             if not announced:
                 announced = True
                 print(
@@ -263,11 +275,12 @@ def _stop_after_ctrl_c(
                 print(f"{PROG}: killing lerobot-rollout.", file=sys.stderr)
                 proc.kill()
         except KeyboardInterrupt:
-            print(
-                f"\n{PROG}: Ctrl-C again: LeRobot force-exits on a second signal "
-                "(utils/process.py L97-99); still waiting for it to exit.",
-                file=sys.stderr,
-            )
+            with contextlib.suppress(KeyboardInterrupt):
+                print(
+                    f"\n{PROG}: Ctrl-C again: LeRobot force-exits on a second "
+                    "signal (utils/process.py L97-99); still waiting for it to exit.",
+                    file=sys.stderr,
+                )
 
 
 def run_teed(argv: list[str]) -> RunResult:
@@ -315,7 +328,12 @@ def run_teed(argv: list[str]) -> RunResult:
         if proc is None:
             raise
         interrupted = True
-        _stop_after_ctrl_c(proc, lines, times)
+        while True:  # a Ctrl-C before the wait's own guard starts: wait again
+            try:
+                _stop_after_ctrl_c(proc, lines, times)
+                break
+            except KeyboardInterrupt:
+                continue
     if reader is not None:
         reader.join(timeout=5.0)
     if proc.stdout is not None:
