@@ -42,4 +42,8 @@ exclude = ["projects/_template"]
 
 [tool.coverage.run]
 branch = true
-source = ["shared/so101/src", "projects/hw-setup/src"]
+source = [
+    "shared/so101/src",
+    "projects/hw-setup/src",
+    "projects/act-policy/src",
+]
