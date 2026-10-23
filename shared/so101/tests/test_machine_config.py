@@ -49,6 +49,14 @@ def test_missing_arm_names_the_key(tmp_path):
         load_machine_config(write(tmp_path, text))
 
 
+def test_bad_port_message_names_cu_as_well_as_tty(tmp_path):
+    text = GOOD.replace("/dev/ttyACM0", "usb-port-two")
+    with pytest.raises(MachineConfigError) as exc:
+        load_machine_config(write(tmp_path, text))
+    assert "/dev/cu.usbmodem*" in str(exc.value)
+    assert "/dev/tty.usbmodem*" in str(exc.value)
+
+
 def test_bad_port_pattern_names_the_key(tmp_path):
     text = GOOD.replace("/dev/ttyACM0", "usb-port-two")
     with pytest.raises(MachineConfigError, match=r"arms\.follower\.port"):
