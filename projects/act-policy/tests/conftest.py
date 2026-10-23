@@ -53,6 +53,21 @@ def no_serial_port(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(serial.Serial, "open", refuse)
 
 
+@pytest.fixture(autouse=True)
+def no_camera(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail any test that opens a camera through OpenCV.
+
+    LeRobot's OpenCV camera calls ``cv2.VideoCapture`` through the module
+    (cameras/opencv/camera_opencv.py L166, L330), so this catches it.
+    """
+    import cv2
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a test tried to open a camera")
+
+    monkeypatch.setattr(cv2, "VideoCapture", refuse)
+
+
 class NetworkUsed(AssertionError):
     pass
 

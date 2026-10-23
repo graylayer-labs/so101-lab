@@ -20,3 +20,10 @@ def test_no_test_can_reach_the_network() -> None:
 def test_no_test_can_open_a_serial_port() -> None:
     with pytest.raises(AssertionError, match="serial port"):
         serial.Serial("/dev/null")
+
+
+def test_no_test_can_open_a_camera() -> None:
+    import cv2
+
+    with pytest.raises(AssertionError, match="camera"):
+        cv2.VideoCapture(0)
