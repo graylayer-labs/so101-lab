@@ -506,7 +506,7 @@ while count == 0:
 AFTER
 print("done", flush=True)
 """
-# LeRobot's own lines, copied: rollout/strategies/core.py L127 and L134.
+# LeRobot's own lines, copied: rollout/strategies/core.py L127 and L133.
 RETURN_LINE = "INFO Returning robot to initial position before shutdown..."
 DISCONNECT_LINE = "INFO Disconnecting robot..."
 RETURN_1S = """
@@ -559,6 +559,68 @@ def test_ctrl_c_is_forwarded_when_the_child_did_not_get_it(
     assert any("Shutdown signal 2 received" in line for line in result.lines)
     assert "done" in result.lines
     assert "forwarded Ctrl-C" in capfd.readouterr().err
+
+
+SAVE_LINE = "INFO Encoding videos for episode 0"  # datasets/dataset_writer.py L413
+
+
+@pytest.fixture
+def short_waits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Shrink the shutdown waits so a test sees them expire in under 1 s."""
+    monkeypatch.setattr(evaluate, "STOP_WAIT_S", 0.3)
+    monkeypatch.setattr(evaluate, "SAVE_WAIT_S", 0.6)
+    monkeypatch.setattr(evaluate, "KILL_AFTER_S", 0.5)
+
+
+@pytest.mark.usefixtures("short_waits")
+def test_the_return_to_the_start_pose_is_never_cut_short() -> None:
+    after = f"""
+print({RETURN_LINE!r}, flush=True)
+time.sleep(2.0)
+print({DISCONNECT_LINE!r}, flush=True)
+"""
+    result = run_teed(graceful_child("(os.getppid(), os.getpid())", after=after))
+    assert result.code == 0  # a SIGTERM would have been LeRobot's second signal
+    assert "done" in result.lines
+
+
+@pytest.mark.usefixtures("short_waits")
+def test_save_progress_extends_the_deadline() -> None:
+    after = f"""
+for _ in range(5):
+    print({SAVE_LINE!r}, flush=True)
+    time.sleep(0.4)
+"""
+    result = run_teed(graceful_child("(os.getppid(), os.getpid())", after=after))
+    assert result.code == 0
+    assert "done" in result.lines
+
+
+@pytest.mark.usefixtures("short_waits")
+def test_a_silent_hang_is_terminated(capfd: pytest.CaptureFixture[str]) -> None:
+    started = time.monotonic()
+    result = run_teed(
+        graceful_child("(os.getppid(), os.getpid())", after="time.sleep(30)")
+    )
+    assert time.monotonic() - started < 10
+    assert result.code == 1  # LeRobot's handler: SIGTERM is the second signal
+    assert "terminating" in capfd.readouterr().err
+
+
+def test_the_return_hold_ends_once_the_arm_is_disconnected(
+    monkeypatch: pytest.MonkeyPatch, short_waits: None
+) -> None:
+    monkeypatch.setattr(evaluate, "RETURN_HOLD_S", 0.5)
+    after = f"""
+print({RETURN_LINE!r}, flush=True)
+time.sleep(0.1)
+print({DISCONNECT_LINE!r}, flush=True)
+time.sleep(30)
+"""
+    started = time.monotonic()
+    result = run_teed(graceful_child("(os.getppid(), os.getpid())", after=after))
+    assert time.monotonic() - started < 10
+    assert result.code == 1
 
 
 def test_an_interrupted_trial_is_not_scored(

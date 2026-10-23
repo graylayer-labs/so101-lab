@@ -148,10 +148,16 @@ let it come to rest in a safe pose, before each trial ends, and pick a rest
 pose that holds without power. The next trial starts from wherever the arm
 settled, so check it at the `y` prompt.
 
-**Ctrl-C during a trial** stops LeRobot cleanly: it drives the follower back
-to the start pose (about 3 s), then lets go of it. `so101-eval` waits for
-that, up to 60 s, and the trial is not scored. A second Ctrl-C makes
-LeRobot exit at once, possibly mid-move.
+**Ctrl-C during a trial** stops LeRobot cleanly, in this order: it saves
+the episode, encoding its video, while **the arm holds still**, which can
+take a while; then it drives the follower back to the start pose (about
+3 s) and lets go of it. Do not press Ctrl-C again while the arm is still:
+that is LeRobot's second signal, on which it exits at once, possibly
+mid-move. `so101-eval` keeps showing LeRobot's output and waits: at least
+60 s, 5 minutes after the last save line, and never stops it while it is
+returning the arm (until 10 s after LeRobot logs
+`Returning robot to initial position before shutdown...`). Only a silent,
+stuck rollout past those times is terminated.
 
 ## Layout
 

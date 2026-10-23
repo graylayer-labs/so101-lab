@@ -107,7 +107,31 @@ class RunResult:
 
 SHUTDOWN_LOG = "Shutdown signal"  # LeRobot's log on a signal, utils/process.py L89
 SHUTDOWN_GRACE_S = 1.0
-STOP_WAIT_S = 60.0
+# LeRobot's lines after a Ctrl-C, copied from 0.6.1. The arm holds still
+# while these show the episode being saved:
+SAVE_LOGS = (
+    "saving any in-progress episode",  # rollout/strategies/episodic.py L200
+    "Encoding videos for episode",  # datasets/dataset_writer.py L413
+    "Batch encoding",  # datasets/dataset_writer.py L401-402
+    "Encoding remaining",  # datasets/dataset_writer.py L658-659
+    "Stop recording",  # rollout/strategies/episodic.py L314
+    "Finalizing dataset...",  # rollout/strategies/episodic.py L320
+)
+# ...and then this one while it drives the follower back:
+RETURN_LOG = "Returning robot to initial position before shutdown..."  # core.py L127
+# The waits. The arm is safe while it holds still, so these err long.
+STOP_WAIT_S = 60.0  # after the Ctrl-C, at least
+# After the last save line: with LeRobot's default batch size of 1 an
+# episode's videos are encoded inside save_episode with no log at all
+# (datasets/dataset_writer.py L341-366), after the L200 line. A 30 s,
+# two-camera 640x480 episode with libsvtav1 (LeRobot's default codec) on
+# the M4 CPU has not been timed; 5 min is 5x the base.
+SAVE_WAIT_S = 300.0
+# The return is 150 steps at 50 Hz, 3 s (strategies/core.py L141, L147-155);
+# the movement cap adds a bus read to each. 10 s is over 3x that.
+RETURN_HOLD_S = 10.0
+KILL_AFTER_S = 5.0  # SIGTERM, then SIGKILL; never during the return either
+POLL_S = 0.1
 PROTOCOL_EPISODE_TIME_S = 30.0  # "a time limit of 30 s" (#76 eval protocol)
 INTERRUPTED = 130  # the shell's exit status for Ctrl-C
 
@@ -142,33 +166,43 @@ START_POSE_WARNING = (
 )
 
 
-def _wait(proc: subprocess.Popen[str], timeout: float) -> bool:
-    """Wait for ``proc`` to exit, up to ``timeout`` s; True if it did.
+def _last_index(lines: list[str], markers: tuple[str, ...]) -> int | None:
+    for i in range(len(lines) - 1, -1, -1):
+        if any(marker in lines[i] for marker in markers):
+            return i
+    return None
 
-    A further Ctrl-C while waiting is noted and the wait goes on: the child
-    gets it from the terminal too, and stopping here would leave the arm
-    moving behind a shell prompt.
+
+def _returning(lines: list[str], times: list[float], now: float) -> bool:
+    """True while LeRobot may be driving the follower back to its start pose.
+
+    That is while its return line is the last line seen, or less than
+    ``RETURN_HOLD_S`` after it.
     """
-    deadline = time.monotonic() + timeout
-    while True:
-        left = deadline - time.monotonic()
-        if left <= 0:
-            return proc.poll() is not None
-        try:
-            proc.wait(timeout=left)
-            return True
-        except subprocess.TimeoutExpired:
-            return False
-        except KeyboardInterrupt:
-            print(
-                f"\n{PROG}: Ctrl-C again: LeRobot force-exits on a second signal "
-                "(utils/process.py L97-99); still waiting for it to exit.",
-                file=sys.stderr,
-            )
+    i = _last_index(lines, (RETURN_LOG,))
+    if i is None:
+        return False
+    return i == len(lines) - 1 or now - times[i] < RETURN_HOLD_S
 
 
-def _stop_after_ctrl_c(proc: subprocess.Popen[str], lines: list[str]) -> None:
+def _deadline(started: float, lines: list[str], times: list[float]) -> float:
+    """``STOP_WAIT_S`` after the Ctrl-C, or ``SAVE_WAIT_S`` after the last
+    save-progress line, whichever is later."""
+    i = _last_index(lines, SAVE_LOGS)
+    saving = times[i] + SAVE_WAIT_S if i is not None else started
+    return max(started + STOP_WAIT_S, saving)
+
+
+def _stop_after_ctrl_c(
+    proc: subprocess.Popen[str], lines: list[str], times: list[float]
+) -> None:
     """Let LeRobot finish its own clean shutdown after a Ctrl-C.
+
+    After a signal, LeRobot 0.6.1 first saves the episode (encoding its
+    video, rollout/strategies/episodic.py L196-202), finalises the dataset
+    (L319-321), and only then drives the follower back to its start pose and
+    disconnects (L336-339; strategies/core.py L119-135). The arm holds still
+    while the video saves, which can take a while.
 
     A terminal Ctrl-C reaches the whole foreground process group, so
     lerobot-rollout usually has it already. Sending another would be its
@@ -177,30 +211,63 @@ def _stop_after_ctrl_c(proc: subprocess.Popen[str], lines: list[str]) -> None:
     forwarded only if LeRobot has not logged that it got one
     (``Shutdown signal ... received``, L89) anywhere in its output by
     ``SHUTDOWN_GRACE_S`` after ours.
+
+    After that the child is only stopped (SIGTERM, then SIGKILL
+    ``KILL_AFTER_S`` later) once it is past the deadline (``_deadline``) and
+    never while it may be moving the arm back (``_returning``). A further
+    Ctrl-C anywhere in here is noted and the wait goes on.
     """
-    print(
-        f"\n{PROG}: Ctrl-C: waiting for lerobot-rollout to stop and return the "
-        f"follower to its start pose (up to {STOP_WAIT_S:.0f} s). Watch the arm.",
-        file=sys.stderr,
-    )
-    if _wait(proc, SHUTDOWN_GRACE_S):
-        return
-    # Any shutdown log so far, even one teed before our own Ctrl-C arrived,
-    # means one more signal would be LeRobot's second.
-    if not any(SHUTDOWN_LOG in line for line in lines):
-        print(f"{PROG}: forwarded Ctrl-C to lerobot-rollout.", file=sys.stderr)
-        proc.send_signal(signal.SIGINT)
-    if _wait(proc, STOP_WAIT_S):
-        return
-    print(
-        f"{PROG}: lerobot-rollout did not exit in {STOP_WAIT_S:.0f} s; "
-        "terminating it. Check the arm.",
-        file=sys.stderr,
-    )
-    proc.terminate()
-    if not _wait(proc, 5.0):
-        proc.kill()
-        proc.wait()
+    started = time.monotonic()
+    announced = forwarded = False
+    terminated_at: float | None = None
+    while proc.poll() is None:
+        try:
+            if not announced:
+                announced = True
+                print(
+                    f"\n{PROG}: Ctrl-C: waiting for lerobot-rollout to save the "
+                    "episode (the arm holds still meanwhile, which can take a "
+                    "while), then return the follower to its start pose. Do not "
+                    "press Ctrl-C again. Watch the arm.",
+                    file=sys.stderr,
+                )
+            try:
+                proc.wait(timeout=POLL_S)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+            now = time.monotonic()
+            # Read the count once: the tee thread appends a time before its line.
+            seen = lines[: len(lines)]
+            if not forwarded and now - started >= SHUTDOWN_GRACE_S:
+                forwarded = True
+                # Any shutdown log so far, even one teed before our own Ctrl-C
+                # arrived, means one more signal would be LeRobot's second.
+                if not any(SHUTDOWN_LOG in line for line in seen):
+                    print(
+                        f"{PROG}: forwarded Ctrl-C to lerobot-rollout.", file=sys.stderr
+                    )
+                    proc.send_signal(signal.SIGINT)
+            if _returning(seen, times, now):
+                continue
+            if terminated_at is None:
+                if now >= _deadline(started, seen, times):
+                    print(
+                        f"{PROG}: lerobot-rollout is still running with no save "
+                        "progress; terminating it. Check the arm.",
+                        file=sys.stderr,
+                    )
+                    proc.terminate()
+                    terminated_at = now
+            elif now - terminated_at >= KILL_AFTER_S:
+                print(f"{PROG}: killing lerobot-rollout.", file=sys.stderr)
+                proc.kill()
+        except KeyboardInterrupt:
+            print(
+                f"\n{PROG}: Ctrl-C again: LeRobot force-exits on a second signal "
+                "(utils/process.py L97-99); still waiting for it to exit.",
+                file=sys.stderr,
+            )
 
 
 def run_teed(argv: list[str]) -> RunResult:
@@ -219,6 +286,7 @@ def run_teed(argv: list[str]) -> RunResult:
     """
     env = os.environ | {"PYTHONUNBUFFERED": "1"}
     lines: list[str] = []
+    times: list[float] = []  # time.monotonic() each line arrived
     interrupted = False
     proc: subprocess.Popen[str] | None = None
     reader: threading.Thread | None = None
@@ -227,6 +295,7 @@ def run_teed(argv: list[str]) -> RunResult:
         for line in stream:
             sys.stdout.write(line)
             sys.stdout.flush()
+            times.append(time.monotonic())
             lines.append(line.rstrip("\r\n"))
 
     try:
@@ -246,7 +315,7 @@ def run_teed(argv: list[str]) -> RunResult:
         if proc is None:
             raise
         interrupted = True
-        _stop_after_ctrl_c(proc, lines)
+        _stop_after_ctrl_c(proc, lines, times)
     if reader is not None:
         reader.join(timeout=5.0)
     if proc.stdout is not None:

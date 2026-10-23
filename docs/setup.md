@@ -630,7 +630,10 @@ For real:
 2. Place the cube, then type `y` at the prompt.
 3. During the episode: right arrow ends it early, left arrow re-records it,
    Escape stops (use it for safety; score the trial as a fail). Ctrl-C also
-   stops it cleanly and leaves the trial unscored; press it once only.
+   stops it cleanly and leaves the trial unscored. Press it once only: the
+   arm first holds still while LeRobot saves the episode's video, which can
+   take a while, then returns to the start pose. A second Ctrl-C makes
+   LeRobot exit at once, possibly mid-move.
    **At the end of every trial the follower loses torque and goes limp**
    (LeRobot disconnects with `disable_torque_on_disconnect=True`): support
    the arm or let it rest in a safe pose before the trial ends.
