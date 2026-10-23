@@ -86,6 +86,47 @@ def test_reads_calibrated_positions_and_their_difference(root: Path, fake_arms) 
     assert [j.joint for j in alignment.joints] == list(align.JOINTS)
 
 
+def test_raw_ticks_read_as_hand_computed_degrees_and_percent(
+    root: Path, fake_arms
+) -> None:
+    """Expected values worked out by hand, not through LeRobot's conversion.
+
+    lerobot 0.6.1 motors/motors_bus.py L874-877 (DEGREES) and L871-873
+    (RANGE_0_100), drive_mode 0:
+
+        degrees = (raw - (range_min + range_max) / 2) * 360 / (4096 - 1)
+        percent = (raw - range_min) / (range_max - range_min) * 100
+
+    Homing does not enter: the motor applies Homing_Offset itself and
+    reports Present_Position = Actual_Position - Homing_Offset
+    (motors/feetech/feetech.py L278-282), so the raw tick read is already
+    homed. Ranges are those of the committed hardware/calibration/*/main.json.
+    """
+    factory, _ = fake_arms(
+        raw_ticks={
+            # elbow_flex: leader range 734-3003 (mid 1868.5), follower
+            # 1132-3102 (mid 2117). gripper: leader 1269-2468, follower
+            # 1433-2870.
+            ArmRole.LEADER: {"elbow_flex": 2005, "gripper": 1509},
+            ArmRole.FOLLOWER: {"elbow_flex": 2253, "gripper": 1720},
+        }
+    )
+    alignment = check_alignment(config_of(root), root, device_factory=factory)
+    elbow = gap(alignment, "elbow_flex")
+    gripper = gap(alignment, "gripper")
+    # (2005 - 1868.5) * 360 / 4095 = 136.5 * 360 / 4095 = 12.0
+    assert elbow.leader == pytest.approx(12.0, abs=1e-6)
+    # (2253 - 2117) * 360 / 4095 = 48960 / 4095 = 11.95604...
+    assert elbow.follower == pytest.approx(11.956044, abs=1e-5)
+    assert elbow.diff == pytest.approx(0.043956, abs=1e-5)
+    assert elbow.unit == "deg"
+    # (1509 - 1269) / 1199 * 100 = 20.01668...; (1720 - 1433) / 1437 * 100
+    # = 19.97216...
+    assert gripper.leader == pytest.approx(20.016681, abs=1e-5)
+    assert gripper.follower == pytest.approx(19.972164, abs=1e-5)
+    assert gripper.unit == "%"
+
+
 def test_nothing_is_ever_written_to_either_arm(root: Path, fake_arms) -> None:
     factory, devices = fake_arms(leader={"elbow_flex": 40.0})
     check_alignment(config_of(root), root, device_factory=factory)

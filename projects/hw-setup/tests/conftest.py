@@ -116,6 +116,8 @@ class FakeFeetechBus(FeetechMotorsBus):
         super().__init__(port, motors, calibration)
         handler = FakePortHandler(port)
         handler.open_ok = open_ok
+        # The fake stands in for scservo_sdk's PortHandler and has only the
+        # members LeRobot's bus uses, so it is not the declared PortHandler type.
         self.port_handler = handler  # ty: ignore[invalid-assignment]
         self.raw = dict(raw)
         self.motor_calibration = motor_calibration or calibration
@@ -232,6 +234,7 @@ def fake_arms() -> MakeArms:
     def make(
         leader: Positions | None = None,
         follower: Positions | None = None,
+        raw_ticks: dict[ArmRole, dict[str, int]] | None = None,
         **bus_options: dict[ArmRole, Any],
     ) -> tuple[align.DeviceFactory, dict[ArmRole, Any]]:
         poses = {ArmRole.LEADER: leader or {}, ArmRole.FOLLOWER: follower or {}}
@@ -247,7 +250,7 @@ def fake_arms() -> MakeArms:
                     real.port,
                     real.motors,
                     real.calibration,
-                    raw=raw_for(real, pose),
+                    raw=raw_for(real, pose) | (raw_ticks or {}).get(role, {}),
                     **options,
                 )
             built.update(devices)
