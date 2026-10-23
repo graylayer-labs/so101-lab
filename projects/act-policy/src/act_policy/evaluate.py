@@ -2,7 +2,7 @@
 
 Each trial is one ``lerobot-rollout --strategy.type=episodic`` run of one
 episode (``act_policy.rollout_argv``); the owner scores it at a prompt when
-it ends and the score is appended to ``outputs/eval/<run>/trials.jsonl``
+it ends and the score is appended to ``outputs/eval/<run>/<checkpoint>/trials.jsonl``
 (``act_policy.trials``). The first trial creates the eval dataset and later
 ones resume it, so every episode's video ends up in one local dataset.
 
@@ -19,7 +19,7 @@ Before anything runs, also under ``--dry-run``:
 - the dataset root follows ``so101-record``'s rules
   (``hw_setup.record.dataset_root_problem``): outside the workspace, new
   unless ``--resume``, and never a half-written one. The default is
-  ``$HF_LEROBOT_HOME/local/rollout_<run>``.
+  ``$HF_LEROBOT_HOME/local/rollout_<run>_<checkpoint>``.
 
 The follower's start pose is not checked: no safe pose is defined in the
 repo and the leader is not connected to compare with. LeRobot captures the
@@ -32,7 +32,7 @@ follower is at its rest pose before it starts.
 ``--dry-run`` prints the plan and the exact command, and runs nothing.
 
 The rollout's output is teed: shown on the terminal as it comes and kept,
-per trial, in ``outputs/eval/<run>/logs/trial-<n>.log``. From it and the
+per trial, in ``outputs/eval/<run>/<checkpoint>/logs/trial-<n>.log``. From it and the
 episode's frame count, ``act_policy.control_rate`` measures the control
 rate, which goes into trials.jsonl; below 25 Hz a warning is printed, as
 #76 asks for the rate to be noted with the result.
@@ -295,7 +295,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--repo-id",
         type=_repo_id,
-        help=f"eval dataset name (default: {REPO_OWNER}/rollout_<run>)",
+        help=f"eval dataset name (default: {REPO_OWNER}/rollout_<run>_<checkpoint>)",
     )
     parser.add_argument(
         "--dataset-root",
@@ -428,7 +428,9 @@ def main(
     args = _parser().parse_args(argv)
     policy_path = args.policy.expanduser().absolute()
     run, checkpoint = run_name(policy_path)
-    repo_id = args.repo_id or f"{REPO_OWNER}/{ROLLOUT_PREFIX}{run}"
+    # One eval dataset per checkpoint, as for the trial log (trials_path).
+    name = f"{run}_{checkpoint}" if checkpoint else run
+    repo_id = args.repo_id or f"{REPO_OWNER}/{ROLLOUT_PREFIX}{name}"
     try:
         workspace = root if root is not None else find_workspace_root()
         config = load_local_config(workspace, args.config)
@@ -477,7 +479,7 @@ def main(
         print(f"{PROG}: {MPS_WARNING}", file=sys.stderr)
     elif device == "cpu":
         print(f"{PROG}: {CPU_WARNING}", file=sys.stderr)
-    log = trials_path(workspace, run)
+    log = trials_path(workspace, run, checkpoint)
     _print_plan(
         policy,
         checkpoint,

@@ -9,7 +9,7 @@ Newest first. One entry per merged task or chunk.
 follower's calibration, the checkpoint, and that the cameras match what the
 policy was trained on in name, size and fps. After each trial it asks for a
 score, against #76's success definition and stages, and appends it to
-`outputs/eval/<run>/trials.jsonl` with the control rate measured from
+`outputs/eval/<run>/<checkpoint>/trials.jsonl` with the control rate measured from
 LeRobot's own output. It is tested with fakes only; no policy has run on the
 arm yet, so no real control rate has been measured (#81).
 

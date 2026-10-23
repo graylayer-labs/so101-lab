@@ -10,6 +10,7 @@ metadata LeRobot reads back on ``--resume`` (the files
 """
 
 import json
+import shutil
 import sys
 import time
 from collections.abc import Callable, Iterator, Sequence
@@ -109,7 +110,7 @@ def base_args(policy: Path, episodes: int = 1) -> list[str]:
 
 
 def trials_file(workspace: Path) -> Path:
-    return workspace / "outputs" / "eval" / "act_pick_cube" / "trials.jsonl"
+    return workspace / "outputs" / "eval" / "act_pick_cube" / "last" / "trials.jsonl"
 
 
 def read_trials(workspace: Path) -> list[dict]:
@@ -137,7 +138,7 @@ def test_dry_run_prints_the_plan_and_runs_nothing(
     assert "Teleop: none" in out
     assert "Trials: 10" in out
     assert "Device: cuda" in out
-    assert f"{lerobot_home / 'local' / 'rollout_act_pick_cube'}" in out
+    assert f"{lerobot_home / 'local' / 'rollout_act_pick_cube_last'}" in out
     assert "Dry run: nothing was run." in out
     assert not (workspace / "outputs").exists()
     assert not lerobot_home.exists()
@@ -255,7 +256,7 @@ def test_existing_dataset_root_needs_resume(
     make_policy: MakePolicy,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    root = lerobot_home / "local" / "rollout_act_pick_cube"
+    root = lerobot_home / "local" / "rollout_act_pick_cube_last"
     FakeRollout()(["x", f"--dataset.root={root}"])
     args = [*base_args(make_policy()), "--dry-run"]
     assert run(workspace, lerobot_home, args) == 1
@@ -303,7 +304,7 @@ def test_each_trial_runs_one_episode_and_is_scored(
     assert "--resume=true" in second
     assert all("--dataset.num_episodes=1" in call for call in runner.calls)
     assert flag(first, "--dataset.root") == str(
-        lerobot_home / "local" / "rollout_act_pick_cube"
+        lerobot_home / "local" / "rollout_act_pick_cube_last"
     )
 
     trials = read_trials(workspace)
@@ -320,7 +321,7 @@ def test_each_trial_runs_one_episode_and_is_scored(
     assert trials[0]["fps"] == 30
     assert trials[0]["episode_time_s"] == 30.0
     assert trials[0]["max_relative_target"] == 5.0
-    assert trials[0]["dataset_repo_id"] == "local/rollout_act_pick_cube"
+    assert trials[0]["dataset_repo_id"] == "local/rollout_act_pick_cube_last"
     assert trials[0]["time_utc"].endswith("Z")
     assert "1/2 succeeded" in capsys.readouterr().out
 
@@ -351,9 +352,7 @@ def test_a_failed_rollout_stops_without_a_trial_row(
     args = base_args(make_policy(), 2)
     assert run(workspace, lerobot_home, args, runner=runner, ask=ask) == 3
     assert len(runner.calls) == 1
-    assert not (
-        workspace / "outputs" / "eval" / "act_pick_cube" / "trials.jsonl"
-    ).exists()
+    assert not (trials_file(workspace)).exists()
 
 
 def test_an_episode_that_was_not_saved_has_no_index(
@@ -391,9 +390,7 @@ def test_ctrl_d_at_a_prompt_stops_cleanly(
     args = base_args(make_policy(), 3)
     assert run(workspace, lerobot_home, args, runner=runner, ask=ask) == 1
     assert len(runner.calls) == 1
-    assert not (
-        workspace / "outputs" / "eval" / "act_pick_cube" / "trials.jsonl"
-    ).exists()
+    assert not (trials_file(workspace)).exists()
 
 
 # --- control rate --------------------------------------------------------
@@ -438,7 +435,7 @@ def test_the_rollout_output_is_kept_per_trial(
         run(workspace, lerobot_home, base_args(make_policy()), runner=runner, ask=ask)
         == 0
     )
-    log = workspace / "outputs" / "eval" / "act_pick_cube" / "logs" / "trial-001.log"
+    log = trials_file(workspace).parent / "logs" / "trial-001.log"
     assert log.read_text().splitlines() == ["INFO a", slow_line(20.0)]
     (trial,) = read_trials(workspace)
     assert trial["rollout_log"] == str(log)
@@ -562,3 +559,27 @@ def test_the_time_limit_defaults_to_the_76_protocol(
     assert run(workspace, lerobot_home, base_args(policy), ask=ask) == 0
     (trial,) = read_trials(workspace)
     assert trial["episode_time_s"] == 30.0
+
+
+def test_two_checkpoints_of_one_run_never_share_a_dataset_or_a_log(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    last = make_policy()
+    step = last.parents[1] / "050000" / "pretrained_model"
+    shutil.copytree(last, step)
+    for policy in (last, step):
+        ask = Answers("y", "y", "", "")
+        assert run(workspace, lerobot_home, base_args(policy), ask=ask) == 0
+    evals = workspace / "outputs" / "eval" / "act_pick_cube"
+    for checkpoint in ("last", "050000"):
+        (trial,) = [
+            json.loads(x)
+            for x in (evals / checkpoint / "trials.jsonl").read_text().splitlines()
+        ]
+        assert trial["trial"] == 1
+        assert trial["checkpoint"] == checkpoint
+        assert trial["dataset_repo_id"] == f"local/rollout_act_pick_cube_{checkpoint}"
+        assert (lerobot_home / "local" / f"rollout_act_pick_cube_{checkpoint}").is_dir()

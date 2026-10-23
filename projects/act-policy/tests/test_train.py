@@ -753,7 +753,7 @@ def test_a_micro_trained_checkpoint_passes_the_eval_preflight(
     )
     out = capsys.readouterr().out
     assert f"Cameras checked: front 32x32 at {FPS} fps match" in out
-    assert f"Dataset: local/rollout_{STAMP}_cube (new dataset)" in out
+    assert f"Dataset: local/rollout_{STAMP}_cube_last (new dataset)" in out
     assert "Dry run: nothing was run." in out
 
     # LeRobot's own rollout parser loads the real checkpoint from the command.

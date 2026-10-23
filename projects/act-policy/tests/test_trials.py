@@ -119,8 +119,15 @@ def test_record_fields() -> None:
 
 
 def test_records_append_one_json_line_each(tmp_path: Path) -> None:
-    path = trials_path(tmp_path, "act_pick_cube")
-    assert path == tmp_path / "outputs" / "eval" / "act_pick_cube" / "trials.jsonl"
+    path = trials_path(tmp_path, "act_pick_cube", "last")
+    assert (
+        path
+        == tmp_path / "outputs" / "eval" / "act_pick_cube" / "last" / "trials.jsonl"
+    )
+    assert (
+        trials_path(tmp_path, "run", "")
+        == tmp_path / "outputs" / "eval" / "run" / "trials.jsonl"
+    )
     assert count_trials(path) == 0
     append_trial(path, {"trial": 1, "success": True})
     append_trial(path, {"trial": 2, "success": False})

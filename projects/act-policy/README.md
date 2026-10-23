@@ -87,7 +87,7 @@ follower is at its rest pose; after it you score it:
   `5 released in the bin` (a success is always `released in the bin`);
 - the start position and a note on the failure mode, both optional.
 
-Each score is appended at once to `outputs/eval/<run>/trials.jsonl`, one
+Each score is appended at once to `outputs/eval/<run>/<checkpoint>/trials.jsonl`, one
 JSON object per line: `trial`, `episode_index`, `time_utc`, `success`,
 `stage`, `start_position`, `notes`, then the run's settings (`policy`,
 `checkpoint`, `task`, `device`, `fps`, `episode_time_s`,
@@ -95,7 +95,7 @@ JSON object per line: `trial`, `episode_index`, `time_utc`, `success`,
 measured control rate (`control_hz`, `frames`, `slow_steps`,
 `slowest_step_hz`) and `rollout_log`, the trial's saved output. `<run>` is the
 training run's folder name, the one above `checkpoints/`. The eval videos go
-to a local LeRobot dataset, `$HF_LEROBOT_HOME/local/rollout_<run>` by
+to a local LeRobot dataset, `$HF_LEROBOT_HOME/local/rollout_<run>_<checkpoint>` by
 default; the first trial creates it and later ones add to it.
 
 Checks before anything runs, also with `--dry-run`; any failure exits 1:
@@ -117,7 +117,7 @@ Checks before anything runs, also with `--dry-run`; any failure exits 1:
   `rollout_` (LeRobot refuses others, but only after the robot connects).
 
 **Control rate.** The rollout's output is shown as it runs and also saved to
-`outputs/eval/<run>/logs/trial-<n>.log`. LeRobot prints one line for each
+`outputs/eval/<run>/<checkpoint>/logs/trial-<n>.log`. LeRobot prints one line for each
 late control step, `Record loop is running slower (<hz> Hz) than the target
 FPS (<fps> Hz)` (`lerobot/rollout/strategies/episodic.py` L249-254), and
 nothing for the others, which take exactly `1/fps`. With the episode's frame

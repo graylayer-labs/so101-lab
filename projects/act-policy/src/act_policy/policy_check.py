@@ -248,7 +248,7 @@ def run_name(path: Path) -> tuple[str, str]:
         if owner >= 1 and parts[owner] == LEROBOT_DIR:
             owner -= 1
         if owner >= 0 and index + 1 < len(parts):
-            return _UNSAFE.sub("_", parts[owner]), parts[index + 1]
+            return _UNSAFE.sub("_", parts[owner]), _UNSAFE.sub("_", parts[index + 1])
     name = path.parent.name if path.name == "pretrained_model" else path.name
     return _UNSAFE.sub("_", name), ""
 

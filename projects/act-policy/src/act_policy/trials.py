@@ -6,9 +6,10 @@ failure mode). The stage names and the success definition are #76's, word
 for word. A success always reaches the last stage, ``released in the bin``;
 a fail can too (a touch or an Escape is a fail whatever the cube did).
 
-The log is ``outputs/eval/<run>/trials.jsonl`` in the workspace (``outputs/``
-is gitignored): one JSON object per line, appended and flushed as soon as an
-episode is scored, so a crash or Ctrl-C keeps every trial scored before it.
+The log is ``outputs/eval/<run>/<checkpoint>/trials.jsonl`` in the workspace
+(``outputs/`` is gitignored): one JSON object per line, appended and flushed
+as soon as an episode is scored, so a crash or Ctrl-C keeps every trial
+scored before it.
 """
 
 import json
@@ -92,8 +93,17 @@ def trial_record(
     }
 
 
-def trials_path(workspace: Path, run: str) -> Path:
-    return workspace / EVAL_DIR / run / TRIALS_FILE
+def trials_path(workspace: Path, run: str, checkpoint: str) -> Path:
+    """``outputs/eval/<run>/<checkpoint>/trials.jsonl``, one per checkpoint.
+
+    #76 allows evaluating more than one checkpoint ("report all of them"),
+    so two checkpoints of one run never share a log. Without a checkpoint
+    name the run's folder is used.
+    """
+    folder = workspace / EVAL_DIR / run
+    if checkpoint:
+        folder = folder / checkpoint
+    return folder / TRIALS_FILE
 
 
 def count_trials(path: Path) -> int:
