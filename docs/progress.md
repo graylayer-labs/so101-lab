@@ -2,6 +2,54 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-23 · ACT can be trained from the repo with flags we trust
+
+`so101-train` (new project `projects/act-policy/`) builds and runs the
+`lerobot-train` command for ACT on a local dataset. It never pushes to the
+Hub, keeps W&B off, always passes the dataset root, and gives each run a new
+folder `outputs/train/<UTC time>_<dataset>/` with the dataset's own metadata
+in `dataset.json`. `--dry-run` prints the command and runs nothing; `--smoke`
+is a 1,000-step laptop run. Nothing has trained on the real dataset yet: the
+M4 steps/s is still an estimate until the #78 dataset exists.
+
+| Claim | Number | Where |
+|---|---|---|
+| Real `lerobot-train` run in the tests, CPU, tiny ACT | 4 steps, 2.4 s | `test_a_real_cpu_micro_train` |
+| Flags checked by LeRobot's own parser and `validate()` | 13 (12 always passed, plus `use_amp` on cuda) | `tests/test_train.py` |
+| Network connections in the test process | 0 (socket guard) | `tests/conftest.py` |
+| Network in the micro-train's `lerobot-train` child | none needed: the test passed under `sandbox-exec` with all outbound IP denied (reviewer's check) | `test_a_real_cpu_micro_train` |
+| Smoke run length | 1,000 steps | `configs/act_pick_cube.yaml` |
+| M4 steps/s | not measured yet (estimate 0.7-1.5) | #79 |
+
+### What was tried, and what we learned
+
+**Two LeRobot defaults would stop or leak a run.** `policy.push_to_hub`
+defaults to True, and with no `policy.repo_id` training fails at start. A
+dataset folder with missing metadata makes LeRobot download `meta/` from the
+Hub. So the push flag is always false, and a dataset with gaps is refused
+before LeRobot sees it.
+
+**`lerobot-train` refuses an output folder that already exists.** The tool
+wants to write the dataset's metadata before training starts, so it creates
+the run folder, writes `dataset.json`, and points `--output_dir` at a
+`lerobot/` folder inside it that LeRobot then creates.
+
+**Training needs LeRobot's `training` extra.** Without `accelerate` the run
+stops at start. The project adds `lerobot[dataset,training]==0.6.1`: the same
+pin as hw-setup, one version in the lock.
+
+**A real training run fits in a unit test.** With no pretrained backbone
+(that would download ResNet-18 weights), a tiny transformer and a 16-frame
+image dataset, 4 steps on CPU take about 2.4 s, so the test runs by default.
+It uses images, not video, so video decoding is first exercised by the
+smoke run. Here torchcodec cannot load (no FFmpeg libraries) and LeRobot
+decodes with pyav; `dataset.json` records the backend, and the measured
+steps/s should be reported with it.
+
+**`HF_HUB_OFFLINE` covers the Hub, not torchvision.** `lerobot-train` runs
+offline, but a real run still downloads the ResNet-18 weights from
+download.pytorch.org the first time.
+
 ## 2026-10-23 · Teleop now caps each follower move and checks the arms match first
 
 On 2026-10-22 the follower lurched towards the leader at the start of

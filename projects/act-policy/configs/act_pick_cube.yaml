@@ -1,0 +1,23 @@
+# so101-train run config: ACT on the pick-cube dataset (#79).
+#
+# train: the full run. steps and batch_size are LeRobot 0.6.1's own
+# defaults (configs/train.py L111, L102). save_freq is 10,000, not
+# LeRobot's 20,000 (L123), for more checkpoints to compare and to resume
+# from on a spot instance. log_freq is LeRobot's (L114).
+#
+# smoke (so101-train --smoke): a laptop check that training runs, the loss
+# falls and a checkpoint is written. 1,000 steps at the estimated
+# 0.7-1.5 steps/s on the M4 is 11-24 min; it stays inside the 2 h laptop
+# limit down to 0.14 steps/s, five times slower than the low estimate.
+# One checkpoint at the end; log every 50 steps to measure steps/s.
+job_name: act_pick_cube
+train:
+  steps: 100000
+  batch_size: 8
+  save_freq: 10000
+  log_freq: 200
+smoke:
+  steps: 1000
+  batch_size: 8
+  save_freq: 1000
+  log_freq: 50
