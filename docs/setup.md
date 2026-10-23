@@ -633,7 +633,8 @@ For real:
    stops it cleanly and leaves the trial unscored. Press it once only: the
    arm first holds still while LeRobot saves the episode's video, which can
    take a while, then returns to the start pose. A second Ctrl-C makes
-   LeRobot exit at once, possibly mid-move.
+   LeRobot exit at once, possibly mid-move. The stopped trial's episode is
+   still saved; it is logged with `"interrupted": true` and no score.
    **At the end of every trial the follower loses torque and goes limp**
    (LeRobot disconnects with `disable_torque_on_disconnect=True`): support
    the arm or let it rest in a safe pose before the trial ends.

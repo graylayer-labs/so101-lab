@@ -624,16 +624,60 @@ time.sleep(30)
     assert result.code == 1
 
 
-def test_an_interrupted_trial_is_not_scored(
-    workspace: Path, lerobot_home: Path, make_policy: MakePolicy
+def test_an_interrupted_trial_is_logged_unscored(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # LeRobot still saves the episode after a Ctrl-C (episodic.py L196-202),
+    # so the log gets a row for it and the dataset and the log reconcile.
     runner = FakeRollout(interrupted=True)
     ask = Answers("y")
     args = base_args(make_policy(), 3)
     assert run(workspace, lerobot_home, args, runner=runner, ask=ask) == 130
     assert len(runner.calls) == 1
     assert len(ask.prompts) == 1
-    assert not trials_file(workspace).exists()
+    (row,) = read_trials(workspace)
+    assert row["trial"] == 1
+    assert row["interrupted"] is True
+    assert row["episode_index"] == 0
+    assert row["success"] is None and row["stage"] is None
+    assert row["rollout_log"].endswith("trial-001.log")
+    err = capsys.readouterr().err
+    assert "not scored" in err
+    assert "episode 0 is in the eval dataset" in err
+
+
+def test_an_interrupted_trial_with_nothing_saved_says_so(
+    workspace: Path,
+    lerobot_home: Path,
+    make_policy: MakePolicy,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runner = FakeRollout(interrupted=True, saves=False)
+    assert (
+        run(
+            workspace,
+            lerobot_home,
+            base_args(make_policy()),
+            runner=runner,
+            ask=Answers("y"),
+        )
+        == 130
+    )
+    (row,) = read_trials(workspace)
+    assert row["interrupted"] is True and row["episode_index"] is None
+    assert "no episode was saved" in capsys.readouterr().err
+
+
+def test_scored_trials_are_marked_not_interrupted(
+    workspace: Path, lerobot_home: Path, make_policy: MakePolicy
+) -> None:
+    ask = Answers("y", "y", "", "")
+    assert run(workspace, lerobot_home, base_args(make_policy()), ask=ask) == 0
+    (row,) = read_trials(workspace)
+    assert row["interrupted"] is False
 
 
 def test_ctrl_c_at_a_prompt_exits_without_a_traceback(

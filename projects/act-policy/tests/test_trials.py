@@ -107,6 +107,7 @@ def test_record_fields() -> None:
     )
     assert record == {
         "trial": 3,
+        "interrupted": False,
         "episode_index": 2,
         "time_utc": "2026-11-02T14:30:05Z",
         "success": False,

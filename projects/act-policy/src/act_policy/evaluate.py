@@ -75,6 +75,7 @@ from act_policy.trials import (
     append_trial,
     ask_score,
     count_trials,
+    interrupted_record,
     trial_record,
     trials_path,
 )
@@ -654,9 +655,30 @@ def main(
             rollout_log.parent.mkdir(parents=True, exist_ok=True)
             rollout_log.write_text("".join(f"{line}\n" for line in result.lines))
             if result.interrupted:
+                # LeRobot saves the episode even after a Ctrl-C (episodic.py
+                # L196-202), so it is logged, unscored, to keep the eval
+                # dataset's episodes and the log in step.
+                after, _frames = _counts(dataset_root)
+                index = after - 1 if after > episodes_before else None
+                saved_note = (
+                    "no episode was saved"
+                    if index is None
+                    else f"its episode {index} is in the eval dataset"
+                )
+                append_trial(
+                    log,
+                    interrupted_record(
+                        trial=trial,
+                        episode_index=index,
+                        now=now(),
+                        context=context | {"rollout_log": str(rollout_log)},
+                    ),
+                )
                 print(
                     f"{PROG}: trial {trial} stopped (Ctrl-C) and is not scored; "
-                    f"lerobot-rollout exited with {result.code}. Output: {rollout_log}",
+                    f"{saved_note}, logged as interrupted in {log}. "
+                    f"lerobot-rollout exited with {result.code}. Output: "
+                    f"{rollout_log}",
                     file=sys.stderr,
                 )
                 return INTERRUPTED

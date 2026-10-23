@@ -88,7 +88,7 @@ follower is at its rest pose; after it you score it:
 - the start position and a note on the failure mode, both optional.
 
 Each score is appended at once to `outputs/eval/<run>/<checkpoint>/trials.jsonl`, one
-JSON object per line: `trial`, `episode_index`, `time_utc`, `success`,
+JSON object per line: `trial`, `interrupted`, `episode_index`, `time_utc`, `success`,
 `stage`, `start_position`, `notes`, then the run's settings (`policy`,
 `checkpoint`, `task`, `device`, `fps`, `episode_time_s`,
 `max_relative_target`, `dataset_repo_id`, `dataset_root`), then the
@@ -158,6 +158,12 @@ mid-move. `so101-eval` keeps showing LeRobot's output and waits: at least
 returning the arm (until 10 s after LeRobot logs
 `Returning robot to initial position before shutdown...`). Only a silent,
 stuck rollout past those times is terminated.
+
+LeRobot still saves an interrupted trial's episode to the eval dataset, so
+it gets a trials.jsonl row too: `"interrupted": true`, its
+`episode_index`, and `success` and `stage` null. It is not scored; leave
+such rows out of the success rate. The dataset's episode count and the
+log's rows then match.
 
 ## Layout
 

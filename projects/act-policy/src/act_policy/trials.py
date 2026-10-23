@@ -83,12 +83,39 @@ def trial_record(
     """One line of trials.jsonl: the score, then the run's settings."""
     return {
         "trial": trial,
+        "interrupted": False,
         "episode_index": episode_index,
         "time_utc": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "success": score.success,
         "stage": score.stage,
         "start_position": score.start_position,
         "notes": score.notes,
+        **context,
+    }
+
+
+def interrupted_record(
+    *,
+    trial: int,
+    episode_index: int | None,
+    now: datetime,
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    """A trial stopped with Ctrl-C: logged, never scored.
+
+    LeRobot still saves its episode, so the row keeps the eval dataset's
+    episode count and the log in step. ``success`` and ``stage`` are null;
+    leave such rows out of the success rate.
+    """
+    return {
+        "trial": trial,
+        "interrupted": True,
+        "episode_index": episode_index,
+        "time_utc": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "success": None,
+        "stage": None,
+        "start_position": "",
+        "notes": "stopped with Ctrl-C; not scored",
         **context,
     }
 
