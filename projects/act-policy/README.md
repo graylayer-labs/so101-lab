@@ -137,6 +137,19 @@ The follower's start pose is not checked by a reading: the repo defines no
 safe pose, and the leader is not connected to compare with. LeRobot holds
 the pose it starts from as "home", so start each trial at the rest pose.
 
+**The follower goes limp after every trial.** Each trial is its own
+`lerobot-rollout`, and LeRobot turns the follower's torque off when it
+disconnects (`disable_torque_on_disconnect=True`,
+`lerobot/robots/so_follower/config_so_follower.py` L31). Support the arm, or
+let it come to rest in a safe pose, before each trial ends, and pick a rest
+pose that holds without power. The next trial starts from wherever the arm
+settled, so check it at the `y` prompt.
+
+**Ctrl-C during a trial** stops LeRobot cleanly: it drives the follower back
+to the start pose (about 3 s), then lets go of it. `so101-eval` waits for
+that, up to 60 s, and the trial is not scored. A second Ctrl-C makes
+LeRobot exit at once, possibly mid-move.
+
 ## Layout
 
 - `src/act_policy/`: the code.

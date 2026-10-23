@@ -22,8 +22,12 @@ Before anything runs, also under ``--dry-run``:
   ``$HF_LEROBOT_HOME/local/rollout_<run>_<checkpoint>``.
 
 The follower's start pose is not checked: no safe pose is defined in the
-repo and the leader is not connected to compare with. LeRobot captures the
-pose at startup and drives the follower back to it at the end (see
+repo and the leader is not connected to compare with. Each trial is its own
+process, and LeRobot disables torque when it disconnects
+(``disable_torque_on_disconnect=True``, robots/so_follower/
+config_so_follower.py L31; so_follower.py L233-234), so the arm goes limp
+after every trial and the next one starts from wherever it came to rest.
+LeRobot captures the pose at startup and drives the follower back to it at the end (see
 ``act_policy.rollout_argv``), so each trial asks for ``y`` to confirm the
 follower is at its rest pose before it starts.
 
@@ -123,7 +127,11 @@ START_POSE_WARNING = (
     "WARNING: the follower's start pose is not checked. LeRobot records the "
     "pose the follower is in when it connects and drives it back there after "
     "each trial, so put it at its rest pose (the pose the training episodes "
-    "started from) before you type y."
+    "started from) before you type y. At the end of every trial the follower "
+    "loses torque and goes limp (LeRobot disconnects with "
+    "disable_torque_on_disconnect=True): support the arm or let it come to "
+    "rest in a safe pose before each trial ends, and use a rest pose that "
+    "holds without power."
 )
 
 

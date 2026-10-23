@@ -356,7 +356,9 @@ def test_start_prompt_warns_that_the_start_pose_is_not_checked(
     )
     assert runner.calls == []
     assert "rest pose" in ask.prompts[0]
-    assert "start pose is not checked" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "start pose is not checked" in err
+    assert "loses torque" in err and "support the arm" in err
     assert not (workspace / "outputs").exists()
 
 
