@@ -2,6 +2,16 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-23 · Odd calibration files get a one-line refusal with the right reason
+
+`so101-teleop` no longer shows a traceback for an unreadable calibration file
+(for example `chmod 000`): it names the arm and exits 1. `so101-calibrate`
+says the right thing for a directory at `<id>.json` (LeRobot would calibrate,
+write the motors, then fail to save), removes a partial backup if closing it
+fails, and its dry-run and `--help` text now say that anything other than 'c'
+at LeRobot's prompt writes the stored file to the motors, not "keeps the
+file". The machine config port error names `cu.*` as well as `tty.*` (#55).
+
 ## 2026-10-23 · Moving a gripper span bound by one now fails a test
 
 The calibration check rejects a gripper span outside 300 to 2500. Its fail

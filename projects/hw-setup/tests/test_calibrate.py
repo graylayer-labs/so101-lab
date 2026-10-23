@@ -1,5 +1,6 @@
 """Tests for so101-calibrate. No hardware: the runner is a fake that writes a file."""
 
+import errno
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -86,7 +87,19 @@ def test_dry_run_prints_the_plan_and_touches_nothing(root, capsys) -> None:
     assert str(backup_path(old, NOW)) in out
     assert format_command(expected_argv(root, ArmRole.FOLLOWER)) in out
     assert "type 'c'" in out
-    assert "anything other than 'c' keeps the existing file" in out
+    assert "keeps the existing file" not in out
+    assert "anything other than 'c' writes the stored calibration file" in out
+    assert "to the motors" in out
+
+
+def test_help_says_enter_writes_the_stored_file_to_the_motors(capsys) -> None:
+    with pytest.raises(SystemExit):
+        main(["--help"])
+    out = " ".join(capsys.readouterr().out.split())
+    assert "anything other than 'c' writes the stored calibration file" in out
+    assert "to the motors" in out
+    assert "so_follower.py L116-124" in out
+    assert "keeps the existing file" not in out
 
 
 def test_dry_run_on_first_calibration_says_no_backup(root, capsys) -> None:
@@ -149,12 +162,14 @@ def test_failed_check_on_first_calibration_has_nothing_to_restore(root, capsys) 
 
 
 def test_keeping_the_existing_file_drops_the_identical_backup(root, capsys) -> None:
-    # Pressing ENTER at LeRobot's prompt keeps the file: LeRobot writes nothing.
+    # Pressing ENTER at LeRobot's prompt keeps the file, but LeRobot writes
+    # that stored file to the motors (so_follower.py L116-124), so say so.
     old = install(root, "follower_main.json")
     runner = FakeLeRobot(old, None)
     assert run(root, runner, "--role", "follower") == 0
     out = capsys.readouterr().out
     assert "unchanged" in out
+    assert "wrote the stored file to the motors" in out
     assert not backup_path(old, NOW).exists()
 
 
@@ -280,8 +295,22 @@ def test_a_directory_in_place_of_the_file_is_refused(root, capsys) -> None:
     old.mkdir()
     runner = FakeLeRobot(old, None)
     assert run(root, runner, "--role", "follower") == 1
-    assert "unreadable" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "unreadable" in err
     assert runner.calls == []
+
+
+def test_a_directory_gets_its_own_reason_not_the_crash_one(root, capsys) -> None:
+    # LeRobot skips a directory (robots/robot.py L55 checks is_file()), so it
+    # calibrates, writes the motors, then fails to save.
+    old = target(root)
+    old.mkdir()
+    runner = FakeLeRobot(old, None)
+    assert run(root, runner, "--role", "follower") == 1
+    err = capsys.readouterr().err
+    assert "LeRobot would calibrate, write the motors, then fail to save" in err
+    assert "would crash" not in err
+    assert "--move-corrupt" in err
 
 
 def test_move_corrupt_that_cannot_move_is_an_error(root, capsys) -> None:
@@ -301,6 +330,43 @@ def test_copy_new_never_overwrites(tmp_path: Path) -> None:
     with pytest.raises(FileExistsError):
         copy_new(src, dst)
     assert dst.read_text() == "earlier"
+
+
+class _FailingClose:
+    """A file whose close() fails after closing, like a flush error at ENOSPC."""
+
+    def __init__(self, real) -> None:
+        self._real = real
+
+    def __getattr__(self, name: str):
+        return getattr(self._real, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self._real.close()
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+
+def test_copy_new_removes_the_partial_file_when_close_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    src, dst = tmp_path / "a", tmp_path / "b"
+    src.write_text("new")
+    real_open = Path.open
+
+    def fake_open(self: Path, mode: str = "r", *args, **kwargs):
+        handle = real_open(self, mode, *args, **kwargs)
+        return _FailingClose(handle) if mode == "xb" else handle
+
+    monkeypatch.setattr(Path, "open", fake_open)
+    with pytest.raises(OSError, match="No space"):
+        copy_new(src, dst)
+    assert not dst.exists()
 
 
 def test_move_new_never_overwrites(tmp_path: Path) -> None:

@@ -82,7 +82,8 @@ def _parse_arm(raw: Any, role: ArmRole) -> ArmPort:
     if not isinstance(port, str) or not PORT_PATTERN.match(port):
         raise MachineConfigError(
             f"{prefix}.port: {port!r} is not a serial port path "
-            "(expected /dev/tty.usbmodem*, /dev/ttyACM*, /dev/ttyUSB* or COMn)"
+            "(expected /dev/cu.usbmodem*, /dev/tty.usbmodem*, /dev/ttyACM*, "
+            "/dev/ttyUSB* or COMn)"
         )
     return ArmPort(arm_id=arm_id, port=port)
 

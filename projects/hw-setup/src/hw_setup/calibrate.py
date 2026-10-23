@@ -109,11 +109,13 @@ def lerobot_can_load(path: Path) -> bool:
 
 def copy_new(src: Path, dst: Path) -> None:
     """Copy ``src`` to ``dst``; FileExistsError if ``dst`` exists."""
-    with src.open("rb") as fin, dst.open("xb") as fout:
+    with src.open("rb") as fin:
+        fout = dst.open("xb")  # FileExistsError here leaves nothing to remove
         try:
-            shutil.copyfileobj(fin, fout)
+            with fout:  # closing flushes, so a close error is cleaned up too
+                shutil.copyfileobj(fin, fout)
         except BaseException:
-            dst.unlink()
+            dst.unlink(missing_ok=True)
             raise
     shutil.copystat(src, dst)
 
@@ -130,7 +132,10 @@ def _label(crash: bool) -> str:
 
 def _refuse_corrupt(target: Path, backup: Path, reason: str, crash: bool) -> int:
     _err(f"{PROG}: the existing calibration file is {_label(crash)}: {reason}")
-    if crash:
+    if target.is_dir():
+        # robots/robot.py L55 checks is_file(), so LeRobot skips a directory.
+        _err("LeRobot would calibrate, write the motors, then fail to save.")
+    elif crash:
         _err("LeRobot would crash loading it before it asks anything.")
     else:
         _err("It fails the sanity checks, so it is no base to recalibrate from.")
@@ -148,6 +153,11 @@ def _parser() -> argparse.ArgumentParser:
             "Calibrate one SO-101 arm with LeRobot, back up the old file, "
             "check the new one and print what changed per joint."
         ),
+    )
+    parser.epilog = (
+        "At LeRobot's prompt, 'c' then ENTER recalibrates; anything other than "
+        "'c' writes the stored calibration file to the motors and leaves the "
+        "file as it was (so_follower.py L116-124)."
     )
     parser.add_argument("--role", required=True, choices=[r.value for r in ArmRole])
     parser.add_argument(
@@ -173,8 +183,8 @@ def _print_plan(target: Path, backup: Path | None, command: list[str]) -> None:
     if backup:
         print(
             "LeRobot will find the existing file and ask what to do: type 'c' "
-            "and press ENTER to recalibrate; anything other than 'c' keeps the "
-            "existing file."
+            "and press ENTER to recalibrate; anything other than 'c' writes the "
+            "stored calibration file to the motors."
         )
     else:
         print("No calibration file yet: LeRobot goes straight to calibration.")
@@ -280,8 +290,9 @@ def main(
         backup.unlink()
         print(
             "Calibration file unchanged: the existing file was kept (no 'c' at "
-            "LeRobot's prompt), so the identical backup was removed. To "
-            "recalibrate, run again and type 'c'."
+            "LeRobot's prompt) and LeRobot wrote the stored file to the "
+            "motors, so the identical backup was removed. If the arm was "
+            "reassembled, recalibrate: run again and type 'c'."
         )
         return 0
 
