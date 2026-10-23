@@ -142,6 +142,13 @@ def test_run_name_comes_from_the_training_run(tmp_path: Path) -> None:
     )
 
 
+def test_run_name_skips_so101_trains_lerobot_folder(tmp_path: Path) -> None:
+    # so101-train writes outputs/train/<run>/lerobot/checkpoints/<step>/...
+    run = tmp_path / "outputs" / "train" / "20261023T140509Z_cube"
+    path = run / "lerobot" / "checkpoints" / "last" / "pretrained_model"
+    assert run_name(path) == ("20261023T140509Z_cube", "last")
+
+
 @pytest.mark.parametrize(
     ("available", "expected"),
     [

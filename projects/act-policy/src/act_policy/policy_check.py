@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from act_policy.train import LEROBOT_DIR
 from so101.machine_config import MachineConfig
 
 POLICY_CONFIG = "config.json"
@@ -232,6 +233,9 @@ def camera_problems(config: MachineConfig, policy: Policy) -> list[str]:
 def run_name(path: Path) -> tuple[str, str]:
     """``(training run, checkpoint)`` from ``.../<run>/checkpoints/<step>/...``.
 
+    ``so101-train`` puts LeRobot's output in ``<run>/lerobot/``
+    (``act_policy.train.LEROBOT_DIR``), so that folder is skipped.
+
     Without a ``checkpoints`` folder in the path, the run is the folder name
     (its parent's for ``pretrained_model``) and the checkpoint is ''. Only
     letters, digits, ``_``, ``.`` and ``-`` are kept, so the run can name
@@ -240,8 +244,11 @@ def run_name(path: Path) -> tuple[str, str]:
     parts = path.parts
     if "checkpoints" in parts[:-1]:
         index = len(parts) - 1 - parts[::-1].index("checkpoints")
-        if index >= 1 and index + 1 < len(parts):
-            return _UNSAFE.sub("_", parts[index - 1]), parts[index + 1]
+        owner = index - 1
+        if owner >= 1 and parts[owner] == LEROBOT_DIR:
+            owner -= 1
+        if owner >= 0 and index + 1 < len(parts):
+            return _UNSAFE.sub("_", parts[owner]), parts[index + 1]
     name = path.parent.name if path.name == "pretrained_model" else path.name
     return _UNSAFE.sub("_", name), ""
 
