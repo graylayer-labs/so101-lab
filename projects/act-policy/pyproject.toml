@@ -10,10 +10,15 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Eoin McAllister" }]
-dependencies = ["so101"]
+dependencies = [
+    "hw-setup",
+    "lerobot[dataset,training]==0.6.1",
+    "so101",
+]
 
 [tool.uv.sources]
 so101 = { workspace = true }
+hw-setup = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/act_policy"]
