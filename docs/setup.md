@@ -444,6 +444,11 @@ a servo moves under power.
 the problem on stderr and exits 1, also with `--dry-run`. It does not check
 that the ports are present: run Step 5 first.
 
+**Movement cap:** every command passes `--robot.max_relative_target`
+(`--max-step`, default 5: at most 5 degrees per update for the body joints
+and 5 % of range for the gripper). `--max-step none` removes it and prints a
+warning. See the hw-setup README for why 5.
+
 Our advice, not from the upstream guide: before the first run, hold the
 leader near the pose the follower is in, clear the area around the follower,
 and keep a hand on the power supply.
@@ -454,7 +459,8 @@ uv run so101-teleop --dry-run
 
 ```text
 Calibration checked: leader and follower pass.
-Command: lerobot-teleoperate --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower '--robot.cameras={front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}' --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem0000000001 --teleop.id=main --teleop.calibration_dir=<root>/hardware/calibration/leader
+Movement cap: 5.0 per update (degrees for body joints, % of range for the gripper)
+Command: lerobot-teleoperate --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower '--robot.cameras={front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}' --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem0000000001 --teleop.id=main --teleop.calibration_dir=<root>/hardware/calibration/leader --robot.max_relative_target=5.0
 Dry run: nothing was run.
 ```
 
@@ -517,7 +523,8 @@ Dataset root: <home>/.cache/huggingface/lerobot/me/cube
 Task: Pick up the red cube
 Episodes: 10
 Push to Hub: no
-Command: lerobot-record --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower '--robot.cameras={front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}' --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem0000000001 --teleop.id=main --teleop.calibration_dir=<root>/hardware/calibration/leader --dataset.repo_id=me/cube '--dataset.single_task=Pick up the red cube' --dataset.num_episodes=10 --dataset.root=<home>/.cache/huggingface/lerobot/me/cube --dataset.push_to_hub=false --dataset.no_stamp=true
+Movement cap: 5.0 per update (degrees for body joints, % of range for the gripper)
+Command: lerobot-record --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower '--robot.cameras={front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}' --teleop.type=so101_leader --teleop.port=/dev/cu.usbmodem0000000001 --teleop.id=main --teleop.calibration_dir=<root>/hardware/calibration/leader --robot.max_relative_target=5.0 --dataset.repo_id=me/cube '--dataset.single_task=Pick up the red cube' --dataset.num_episodes=10 --dataset.root=<home>/.cache/huggingface/lerobot/me/cube --dataset.push_to_hub=false --dataset.no_stamp=true
 Dry run: nothing was run.
 ```
 

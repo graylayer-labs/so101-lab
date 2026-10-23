@@ -41,9 +41,11 @@ class Runner:
         return self.code
 
 
-def expected(root: Path, **kwargs: bool) -> list[str]:
+def expected(root: Path, *, max_step: float | None = 5.0, **kwargs: bool) -> list[str]:
     config = load_machine_config(root / "configs" / "local.yaml")
-    return teleoperate_argv(config, root.resolve(), **kwargs)
+    return teleoperate_argv(
+        config, root.resolve(), max_relative_target=max_step, **kwargs
+    )
 
 
 def test_runs_the_default_command(root: Path) -> None:
@@ -195,3 +197,46 @@ def test_missing_config_fails_with_a_hint(
     err = capsys.readouterr().err
     assert "so101-find-ports" in err and "example.yaml" in err
     assert runner.calls == []
+
+
+# --- movement cap (#63) ----------------------------------------------------
+
+
+def test_default_cap_is_passed(root: Path) -> None:
+    runner = Runner()
+    main([], runner=runner, root=root)
+    assert "--robot.max_relative_target=5.0" in runner.calls[0]
+
+
+def test_max_step_sets_the_cap(root: Path) -> None:
+    runner = Runner()
+    main(["--max-step", "2.5"], runner=runner, root=root)
+    assert runner.calls == [expected(root, max_step=2.5, cameras=True)]
+
+
+def test_max_step_none_removes_the_cap_with_a_warning(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runner = Runner()
+    assert main(["--max-step", "none"], runner=runner, root=root) == 0
+    assert "--robot.max_relative_target=null" in runner.calls[0]
+    err = capsys.readouterr().err
+    assert "WARNING" in err and "no movement cap" in err
+
+
+@pytest.mark.parametrize("bad", ["0", "-1", "abc", "nan", "inf", ""])
+def test_max_step_that_is_not_positive_is_refused(
+    root: Path, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    runner = Runner()
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--max-step", bad], runner=runner, root=root)
+    assert exit_info.value.code == 2
+    assert runner.calls == []
+    assert "--max-step" in capsys.readouterr().err
+
+
+def test_dry_run_names_the_cap(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    main(["--dry-run"], runner=Runner(), root=root)
+    out = capsys.readouterr().out
+    assert "Movement cap: 5.0 per update" in out

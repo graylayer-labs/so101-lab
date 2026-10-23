@@ -156,7 +156,9 @@ print(format_command(calibrate_argv(config, ArmRole.LEADER, repo.resolve())))
 ```
 
 - `setup_motors_argv` and `calibrate_argv` take one arm (`ArmRole`).
-- `teleoperate_argv` and `record_argv` use both arms and the cameras.
+- `teleoperate_argv` and `record_argv` use both arms and the cameras, and
+  both require `max_relative_target` (a positive float, or None for no cap,
+  passed as `null` so the flag is always present).
   `record_argv` takes the dataset `repo_id`, `single_task` and
   `num_episodes`, plus optional `dataset_root`, `episode_time_s`,
   `reset_time_s`, `fps`, `push_to_hub`, `no_stamp`, `cameras`,
@@ -203,6 +205,32 @@ command and exits 0). Cameras are on by default; `--config PATH` overrides
 `configs/local.yaml` in the workspace root, which has no fallback to the
 example.
 
+### Movement cap
+
+```bash
+uv run so101-teleop --max-step 2.5       # tighter cap
+uv run so101-teleop --max-step none      # no cap; prints a WARNING
+```
+
+Every command passes `--robot.max_relative_target`, from `--max-step`
+(default 5.0). In LeRobot 0.6.1 this is one number for all joints (a dict
+must name every joint, so it is not offered here). On each update the
+follower reads its present position and clamps `goal - present` to
+`±max-step` per joint before writing the goal (`so_follower.py`
+`send_action`, `robots/utils.py` `ensure_safe_goal_position`). The units are
+the follower's normalised units: degrees for the five body joints
+(`use_degrees` is on by default) and percent of the calibrated range for the
+gripper.
+
+Why 5: it is the value used on the real arms on 2026-10-22. It is a cap per
+update, not a speed limit: at LeRobot's 60 Hz teleop loop (30 Hz when
+recording) 5 per update still allows 300 (150) degrees per second, faster
+than you move the leader by hand, so teleop does not lag. What it stops is a
+single update jumping the whole way to a distant leader pose; a 98 degree gap
+is still crossed in about 20 updates, a third of a second, so the alignment
+check below is what prevents the jump. `0`, negative numbers, `nan` and `inf`
+are refused before LeRobot starts. `so101-record` takes the same flag.
+
 ## Record a dataset
 
 ```bash
@@ -243,7 +271,7 @@ check runs first, also with `--dry-run`. Then:
   evaluation). Resuming an existing `eval_` dataset is allowed, as in LeRobot.
 - `--episode-time-s`, `--reset-time-s` and `--fps` are passed only when
   given (LeRobot's defaults: 60 s, 60 s, 30 fps). `--no-cameras`,
-  `--display` and `--config PATH` work as in `so101-teleop`.
+  `--display`, `--max-step` and `--config PATH` work as in `so101-teleop`.
 
 ## Layout
 

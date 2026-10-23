@@ -50,6 +50,8 @@ CAMERAS = (
     "front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, "
     "wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}"
 )
+CAP = 5.0
+MAX = "--robot.max_relative_target=5.0"
 
 
 def test_setup_motors_follower_snapshot():
@@ -73,13 +75,52 @@ def test_calibrate_leader_snapshot():
 
 
 def test_teleoperate_snapshot():
-    argv = teleoperate_argv(CONFIG, ROOT)
-    assert argv == ["lerobot-teleoperate", *FOLLOWER, CAMERAS, *LEADER]
+    argv = teleoperate_argv(CONFIG, ROOT, max_relative_target=CAP)
+    assert argv == ["lerobot-teleoperate", *FOLLOWER, CAMERAS, *LEADER, MAX]
 
 
 def test_teleoperate_display_data_and_no_cameras():
-    argv = teleoperate_argv(CONFIG, ROOT, cameras=False, display_data=True)
-    assert argv == ["lerobot-teleoperate", *FOLLOWER, *LEADER, "--display_data=true"]
+    argv = teleoperate_argv(
+        CONFIG, ROOT, max_relative_target=CAP, cameras=False, display_data=True
+    )
+    assert argv == [
+        "lerobot-teleoperate",
+        *FOLLOWER,
+        *LEADER,
+        MAX,
+        "--display_data=true",
+    ]
+
+
+def test_no_cap_is_passed_as_null_not_left_out():
+    """``None`` still names the flag, so no command is built without it."""
+    for argv in (
+        teleoperate_argv(CONFIG, ROOT, max_relative_target=None),
+        record_argv(
+            CONFIG,
+            ROOT,
+            repo_id="a/b",
+            single_task="T",
+            num_episodes=1,
+            max_relative_target=None,
+        ),
+    ):
+        assert "--robot.max_relative_target=null" in argv
+
+
+@pytest.mark.parametrize("bad", [0.0, -1.0, float("nan"), float("inf")])
+def test_a_cap_that_is_not_positive_and_finite_is_refused(bad):
+    with pytest.raises(ValueError, match="max_relative_target"):
+        teleoperate_argv(CONFIG, ROOT, max_relative_target=bad)
+    with pytest.raises(ValueError, match="max_relative_target"):
+        record_argv(
+            CONFIG,
+            ROOT,
+            repo_id="a/b",
+            single_task="T",
+            num_episodes=1,
+            max_relative_target=bad,
+        )
 
 
 def test_record_snapshot():
@@ -94,12 +135,14 @@ def test_record_snapshot():
         reset_time_s=10,
         fps=30,
         push_to_hub=False,
+        max_relative_target=CAP,
     )
     assert argv == [
         "lerobot-record",
         *FOLLOWER,
         CAMERAS,
         *LEADER,
+        MAX,
         "--dataset.repo_id=graylayer/so101-pick-cube",
         "--dataset.single_task=Pick up the red cube",
         "--dataset.num_episodes=10",
@@ -112,12 +155,20 @@ def test_record_snapshot():
 
 
 def test_record_omits_unset_options():
-    argv = record_argv(CONFIG, ROOT, repo_id="a/b", single_task="Task", num_episodes=1)
+    argv = record_argv(
+        CONFIG,
+        ROOT,
+        repo_id="a/b",
+        single_task="Task",
+        num_episodes=1,
+        max_relative_target=CAP,
+    )
     assert argv == [
         "lerobot-record",
         *FOLLOWER,
         CAMERAS,
         *LEADER,
+        MAX,
         "--dataset.repo_id=a/b",
         "--dataset.single_task=Task",
         "--dataset.num_episodes=1",
@@ -134,11 +185,13 @@ def test_record_resume_no_stamp_and_no_cameras():
         cameras=False,
         no_stamp=True,
         resume=True,
+        max_relative_target=CAP,
     )
     assert argv == [
         "lerobot-record",
         *FOLLOWER,
         *LEADER,
+        MAX,
         "--dataset.repo_id=a/b",
         "--dataset.single_task=Task",
         "--dataset.num_episodes=1",
@@ -163,7 +216,7 @@ def test_wrong_repo_root_is_rejected(tmp_path):
 def test_wrong_relative_repo_root_is_rejected(monkeypatch):
     monkeypatch.chdir(REPO / "projects" / "hw-setup")
     with pytest.raises(CalibrationRootError, match="hardware/calibration"):
-        teleoperate_argv(CONFIG, Path("."))
+        teleoperate_argv(CONFIG, Path("."), max_relative_target=CAP)
 
 
 def test_format_command_quotes_for_the_shell():
@@ -193,7 +246,8 @@ def test_lerobot_parses_setup_motors_and_calibrate(role):
 
 
 def test_lerobot_parses_teleoperate():
-    cfg = parse(TeleoperateConfig, teleoperate_argv(CONFIG, ROOT, display_data=True))
+    argv = teleoperate_argv(CONFIG, ROOT, max_relative_target=CAP, display_data=True)
+    cfg = parse(TeleoperateConfig, argv)
     # so101_* and so100_* name the same classes; `.type` reports so100_*.
     assert isinstance(cfg.robot, SOFollowerRobotConfig)
     assert cfg.robot.port == "/dev/cu.usbmodem0000000002"
@@ -209,6 +263,36 @@ def test_lerobot_parses_teleoperate():
         30,
     )
     assert cfg.robot.cameras["wrist"].index_or_path == 1
+    # A float, not an int: ensure_safe_goal_position (robots/utils.py L96)
+    # tests isinstance(..., float) and raises TypeError for anything else.
+    assert cfg.robot.max_relative_target == 5.0
+    assert isinstance(cfg.robot.max_relative_target, float)
+
+
+@pytest.mark.parametrize("cap", [5.0, 2.5, 1.0])
+def test_lerobot_parses_the_cap_as_a_float(cap):
+    for argv, config_class in (
+        (teleoperate_argv(CONFIG, ROOT, max_relative_target=cap), TeleoperateConfig),
+        (
+            record_argv(
+                CONFIG,
+                ROOT,
+                repo_id="a/b",
+                single_task="T",
+                num_episodes=1,
+                max_relative_target=cap,
+            ),
+            RecordConfig,
+        ),
+    ):
+        value = parse(config_class, argv).robot.max_relative_target
+        assert value == cap
+        assert isinstance(value, float)
+
+
+def test_lerobot_parses_null_as_no_cap():
+    argv = teleoperate_argv(CONFIG, ROOT, max_relative_target=None)
+    assert parse(TeleoperateConfig, argv).robot.max_relative_target is None
 
 
 def test_lerobot_parses_record():
@@ -225,6 +309,7 @@ def test_lerobot_parses_record():
         push_to_hub=False,
         no_stamp=True,
         resume=True,
+        max_relative_target=CAP,
     )
     cfg = parse(RecordConfig, argv)
     assert cfg.resume is True
@@ -235,6 +320,7 @@ def test_lerobot_parses_record():
     assert cfg.dataset.push_to_hub is False
     assert set(cfg.robot.cameras) == {"front", "wrist"}
     assert cfg.teleop is not None and cfg.teleop.id == "main"
+    assert cfg.robot.max_relative_target == 5.0
 
 
 def test_lerobot_rejects_an_unknown_flag():
@@ -246,6 +332,13 @@ def test_lerobot_rejects_an_unknown_flag():
 
 def test_lerobot_rejects_an_unknown_record_flag():
     """The real RecordConfig checks --dataset.* names too."""
-    argv = record_argv(CONFIG, ROOT, repo_id="a/b", single_task="T", num_episodes=1)
+    argv = record_argv(
+        CONFIG,
+        ROOT,
+        repo_id="a/b",
+        single_task="T",
+        num_episodes=1,
+        max_relative_target=CAP,
+    )
     with pytest.raises(SystemExit):
         parse(RecordConfig, [*argv, "--dataset.push_to_hubb=false"])
