@@ -19,6 +19,7 @@ from lerobot.teleoperators.so_leader import SOLeaderTeleopConfig
 
 from hw_setup.lerobot_argv import (
     CalibrationRootError,
+    arm_args,
     calibrate_argv,
     format_command,
     record_argv,
@@ -52,6 +53,11 @@ CAMERAS = (
 )
 CAP = 5.0
 MAX = "--robot.max_relative_target=5.0"
+
+
+def test_arm_args_snapshot():
+    assert arm_args(CONFIG, ArmRole.FOLLOWER, ROOT) == FOLLOWER
+    assert arm_args(CONFIG, ArmRole.LEADER, ROOT) == LEADER
 
 
 def test_setup_motors_follower_snapshot():

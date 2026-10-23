@@ -580,6 +580,83 @@ so101-record: refusing to run: <scratch>/cubeexists holds an incomplete dataset 
   mv <scratch>/cubeexists <scratch>/cubeexists.broken-20261022-215813
 ```
 
+## Step 8. Evaluate a trained policy
+
+`so101-eval` (in `projects/act-policy`). It runs a checkpoint on the
+follower with `lerobot-rollout`, one episode per trial, and asks you to
+score each trial. The leader is not used. Full rules: the
+[act-policy README](../projects/act-policy/README.md#evaluate-a-policy).
+
+**Checks before the follower moves**, also with `--dry-run`: the follower's
+calibration; the checkpoint folder (`config.json`, `model.safetensors`,
+`train_config.json` and the two `policy_*processor.json` files); the cameras in `configs/local.yaml` against the
+policy and its training dataset (names, size, fps); the device; and the
+dataset-root rules of Step 7. It never pushes to the Hub.
+
+```bash
+uv run so101-eval --policy <policy> --task "Pick the cube and place it in the bin" --episodes 10 --dry-run
+```
+
+```text
+so101-eval: WARNING: running the policy on mps. A published SO-101 ACT eval measured about 15 Hz on an Apple M4 with mps and 40% success, against 30 Hz and 90% on CUDA for the same checkpoint. LeRobot logs 'Record loop is running slower' whenever a step misses the target fps. If the loop runs below about 25 Hz, write the rate down with the trials and rerun one diagnostic with --device cpu or without --display. The movement cap (--max-step) also costs rate: it adds a bus read of the follower's position on every step. It is a safety limit, so keep it, but say it was on when you compare rates.
+Calibration checked: follower passes (the leader is not used).
+Policy: <policy> (act, checkpoint last)
+Trained on: local/pick_cube at <datasets>/pick_cube
+Cameras checked: front 640x480, wrist 640x480 at 30 fps match
+Device: mps
+Teleop: none; after each trial LeRobot returns the follower to its start pose
+Dataset: local/rollout_act_pick_cube_20261101_last (new dataset)
+Dataset root: <home>/local/rollout_act_pick_cube_20261101_last
+Task: Pick the cube and place it in the bin
+Time limit: 30.0 s per trial
+Trials: 10 (one lerobot-rollout each; trials after the first add --resume=true)
+Push to Hub: no
+Movement cap: 5.0 per update (degrees for body joints, % of range for the gripper)
+Trial log: <root>/outputs/eval/act_pick_cube_20261101/last/trials.jsonl
+Command: lerobot-rollout --strategy.type=episodic --policy.path=<policy> --policy.device=mps --device=mps --robot.type=so101_follower --robot.port=/dev/cu.usbmodem0000000002 --robot.id=main --robot.calibration_dir=<root>/hardware/calibration/follower '--robot.cameras={front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}}' --robot.max_relative_target=5.0 --dataset.repo_id=local/rollout_act_pick_cube_20261101_last '--dataset.single_task=Pick the cube and place it in the bin' --dataset.root=<home>/local/rollout_act_pick_cube_20261101_last --dataset.num_episodes=1 --dataset.fps=30 --dataset.push_to_hub=false --dataset.no_stamp=true --dataset.episode_time_s=30.0 --fps=30 --display_data=false
+Start pose: not checked; each trial asks for y first.
+Dry run: nothing was run.
+```
+
+(`<policy>` is `.../act_pick_cube_20261101/checkpoints/last/pretrained_model`,
+a checkpoint made for the test without training; `<home>` is
+`$HF_LEROBOT_HOME`.)
+
+For real:
+
+1. Put the follower at its rest pose, the pose the training episodes started
+   from. LeRobot records the pose it connects in and drives the follower back
+   to it after the episode.
+2. Place the cube, then type `y` at the prompt.
+3. During the episode: right arrow ends it early, left arrow re-records it,
+   Escape stops (use it for safety; score the trial as a fail). Ctrl-C also
+   stops it cleanly and leaves the trial unscored. Press it once only: the
+   arm first holds still while LeRobot saves the episode's video, which can
+   take a while, then returns to the start pose. A second Ctrl-C makes
+   LeRobot exit at once, possibly mid-move. The stopped trial's episode is
+   still saved; it is logged with `"interrupted": true` and no score.
+   **At the end of every trial the follower loses torque and goes limp**
+   (LeRobot disconnects with `disable_torque_on_disconnect=True`): support
+   the arm or let it rest in a safe pose before the trial ends.
+4. Score it at the prompts: `y`/`n` against #76's success definition, the
+   furthest stage for a fail (`0 none`, `1 reach`, `2 grasp`, `3 lift`,
+   `4 over the bin`, `5 released in the bin`), the start position and a
+   note. Each trial is saved to `outputs/eval/<run>/<checkpoint>/trials.jsonl` at once,
+   with the control rate measured from LeRobot's output (`Control rate:
+   ... Hz` is printed; under 25 Hz there is a warning to note it with the
+   result).
+
+To add trials later, run the same command with `--resume`.
+
+**If it fails:**
+
+| What you see | What to do |
+|---|---|
+| `camera names differ` or `camera front: configs/local.yaml is 640x480; the policy was trained on ...` | Set `configs/local.yaml` back to the cameras the dataset was recorded with. Do not rename or resize a camera for a trained policy. |
+| `training dataset metadata not found` | Pass `--train-dataset` with the dataset folder the policy was trained on. |
+| `policy ... is missing model.safetensors` | Point `--policy` at a `checkpoints/<step>/pretrained_model` folder. |
+| `device cuda is not available here` | Drop `--device` to pick one automatically. |
+
 ## Quick reference
 
 The order, on a fresh machine with new arms:
@@ -598,6 +675,7 @@ uv run so101-doctor --open-cameras                    # everything PASS
 uv run so101-teleop --no-cameras                      # then without the flag
 uv run so101-record --task "..." --repo-id USER/NAME --episodes 10
 uv run so101-record --task "..." --repo-id USER/NAME --episodes 5 --resume
+uv run so101-eval --policy <checkpoint>/pretrained_model --task "..." --episodes 10
 ```
 
 Add `--dry-run` to any `so101-*` command except `so101-doctor` to see the
@@ -634,6 +712,7 @@ before these scripts existed (#39), outside them.
 | 5. `so101-doctor` | Checks with fakes; ran on a laptop with no arm | An all-PASS run; `--open-cameras` on the real cameras; the macOS camera permission prompt |
 | 6. `so101-teleop` | Gate and command line | The follower tracking the leader; `--display` |
 | 7. `so101-record` | Gate, dataset checks and command line, parsed by LeRobot's `RecordConfig` | A real episode written, and `--resume` on a real dataset |
+| 8. `so101-eval` | Gates, trial log and command line, parsed by LeRobot's `RolloutConfig` with a checkpoint saved by LeRobot's own config savers | A real rollout; the return to the start pose; the control rate on mps (#81) |
 
 The calibration files in `hardware/calibration/` are the owner's first
 calibrations from 2026-10-22 (#39), made outside the scripts. They pass the

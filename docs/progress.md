@@ -2,6 +2,61 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-23 · A trained policy can be run on the follower and each trial scored
+
+`so101-eval` runs a checkpoint on the follower with LeRobot's
+`lerobot-rollout`, one episode per trial. Before the arm moves it checks the
+follower's calibration, the checkpoint, and that the cameras match what the
+policy was trained on in name, size and fps. After each trial it asks for a
+score, against #76's success definition and stages, and appends it to
+`outputs/eval/<run>/<checkpoint>/trials.jsonl` with the control rate measured from
+LeRobot's own output. It is tested with fakes only; no policy has run on the
+arm yet, so no real control rate has been measured (#81).
+
+| Claim | Number | Where |
+|---|---|---|
+| Leader needed for evaluation | no | `lerobot/rollout/configs.py` L225, L276-277 |
+| Push to the Hub | always off | `act_policy/rollout_argv.py` |
+| Camera checks | names, width x height, fps | `act_policy/policy_check.py` |
+| Default movement cap | 5 per update | `--max-step`, as `so101-teleop` |
+| Control rate warning | below 25 Hz | `act_policy/control_rate.py` |
+| Verified on the real arm | not yet | #81, #82 |
+
+### What was tried, and what we learned
+
+**`lerobot-rollout` needs no leader.** Only its DAgger mode requires a
+teleop. Without one, episodic mode drives the follower back to the pose it
+had when it connected, so that pose acts as "home". The wrapper asks you to
+confirm the follower is at its rest pose before each trial.
+
+**Rollout datasets must be named `rollout_*`, not `eval_*`.** The plan said
+`eval_`, the prefix `lerobot-record` keeps for policy runs. In 0.6.1 `lerobot-rollout` refuses any other
+name, but only after it has loaded the policy and connected the robot, so
+the wrapper checks the name first.
+
+**LeRobot does not check camera size or fps.** It refuses camera names only
+when neither set contains the other. A resized or slower camera would run
+and quietly degrade ACT, so the wrapper compares `configs/local.yaml` with
+the policy and its training dataset's `meta/info.json`.
+
+**One rollout per trial.** LeRobot owns the keyboard while it runs, so the
+only way to score each episode as it ends is to run one episode at a time,
+resuming the same eval dataset. The cost is loading the model again for each
+trial.
+
+**LeRobot only prints the late control steps.** Each late step logs its own
+rate, `Record loop is running slower (14.8 Hz) ...`, and skips its sleep;
+every other step sleeps to about `1/fps` (the little work after the
+sleep is not counted). So the late lines plus the
+episode's frame count give the mean rate without changing LeRobot. The
+wrapper tees the output to the terminal, keeps it per trial, and writes the
+rate into each trial's line.
+
+**A policy type has to be registered before LeRobot can read its config.**
+The tests passed, because the fixture imports `ACTConfig`, while the real
+command failed with "Policy type 'act' is not registered". A test in a fresh
+interpreter now catches it.
+
 ## 2026-10-23 · ACT can be trained from the repo with flags we trust
 
 `so101-train` (new project `projects/act-policy/`) builds and runs the

@@ -17,6 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
+so101-eval = "act_policy.evaluate:cli"
 so101-train = "act_policy.train:cli"
 
 [tool.uv.sources]
