@@ -5,9 +5,20 @@ the leader and the follower (the id comes from the machine config) and runs
 ``so101.check_calibration`` on each. If either file is missing or fails, it
 names the arm and the problem and exits 1, also under ``--dry-run``.
 ``--dry-run`` otherwise prints the exact command and runs nothing.
+
+Every command caps how far the follower moves per update
+(``--robot.max_relative_target``, see ``hw_setup.lerobot_argv``). The default,
+``DEFAULT_MAX_STEP`` = 5.0, is 5 degrees per update for the body joints and
+5 % of the calibrated range for the gripper. It is the value used on the real
+arms on 2026-10-22. At LeRobot's default 60 Hz teleop loop (30 Hz when
+recording) it still allows 300 (150) degrees per second, faster than the arm
+is moved by hand, so normal teleop is not slowed; what it stops is a single
+update jumping the full distance to a far-away leader pose. ``--max-step
+none`` passes ``null`` and prints a warning.
 """
 
 import argparse
+import math
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -25,6 +36,49 @@ from so101.calibration import (
 from so101.machine_config import MachineConfig
 
 Runner = Callable[[list[str]], int]
+
+DEFAULT_MAX_STEP = 5.0
+NO_CAP_WARNING = (
+    "WARNING: --max-step none: no movement cap. The follower will move as far "
+    "as the leader asks in a single update."
+)
+
+
+def max_step(text: str) -> float | None:
+    """``--max-step``: a positive number, or ``none`` for no cap."""
+    if text.strip().lower() == "none":
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a number or 'none', got {text!r}"
+        ) from None
+    if not (math.isfinite(value) and value > 0):
+        raise argparse.ArgumentTypeError(f"must be more than 0, got {text!r}")
+    return value
+
+
+def add_max_step_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--max-step",
+        type=max_step,
+        default=DEFAULT_MAX_STEP,
+        help="largest follower move per update: degrees for the body joints, "
+        f"%% of range for the gripper (default: {DEFAULT_MAX_STEP}); "
+        "'none' removes the cap",
+    )
+
+
+def describe_max_step(value: float | None, prog: str) -> str:
+    """The line printed before the command; warns on stderr for no cap."""
+    if value is None:
+        print(f"{prog}: {NO_CAP_WARNING}", file=sys.stderr)
+        return "Movement cap: none (--max-step none)"
+    return (
+        f"Movement cap: {value} per update "
+        "(degrees for body joints, % of range for the gripper)"
+    )
 
 
 def _run(argv: list[str]) -> int:
@@ -71,6 +125,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--display", action="store_true", help="show the data live (--display_data)"
     )
+    add_max_step_argument(parser)
     parser.add_argument(
         "--dry-run", action="store_true", help="check calibrations, print the command"
     )
@@ -96,13 +151,18 @@ def main(
                 print(f"so101-teleop: refusing to run: {problem}", file=sys.stderr)
             return 1
         command = teleoperate_argv(
-            config, workspace, cameras=args.cameras, display_data=args.display
+            config,
+            workspace,
+            max_relative_target=args.max_step,
+            cameras=args.cameras,
+            display_data=args.display,
         )
     except (WorkspaceError, ValueError) as err:
         print(f"so101-teleop: {err}", file=sys.stderr)
         return 1
 
     print("Calibration checked: leader and follower pass.")
+    print(describe_max_step(args.max_step, "so101-teleop"))
     print(f"Command: {format_command(command)}")
     if args.dry_run:
         print("Dry run: nothing was run.")

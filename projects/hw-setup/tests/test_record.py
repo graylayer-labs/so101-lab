@@ -64,6 +64,7 @@ def expected(root: Path, dataset_root: Path, **kwargs: object) -> list[str]:
         "dataset_root": dataset_root,
         "push_to_hub": False,
         "no_stamp": True,
+        "max_relative_target": 5.0,
         **kwargs,
     }
     return record_argv(config, root.resolve(), **options)
@@ -459,3 +460,40 @@ def test_lerobot_parses_the_resume_command(root: Path, home: Path) -> None:
     assert cfg.dataset.root is not None
     assert Path(cfg.dataset.root) == target.resolve()
     assert cfg.dataset.single_task == "Pick up the red cube"
+
+
+# --- movement cap (#63) ----------------------------------------------------
+
+
+def test_default_cap_is_passed(root: Path, home: Path) -> None:
+    runner = Runner()
+    run(BASE, root, home, runner)
+    assert "--robot.max_relative_target=5.0" in runner.calls[0]
+
+
+def test_max_step_sets_the_cap(root: Path, home: Path) -> None:
+    runner = Runner()
+    run([*BASE, "--max-step", "3"], root, home, runner)
+    assert runner.calls == [
+        expected(root, home / "me" / "cube", max_relative_target=3.0)
+    ]
+
+
+def test_max_step_none_removes_the_cap_with_a_warning(
+    root: Path, home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runner = Runner()
+    assert run([*BASE, "--max-step", "none"], root, home, runner) == 0
+    assert "--robot.max_relative_target=null" in runner.calls[0]
+    assert "no movement cap" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("bad", ["0", "-2", "x"])
+def test_max_step_that_is_not_positive_is_refused(
+    root: Path, home: Path, bad: str
+) -> None:
+    runner = Runner()
+    with pytest.raises(SystemExit) as exit_info:
+        run([*BASE, "--max-step", bad], root, home, runner)
+    assert exit_info.value.code == 2
+    assert runner.calls == []

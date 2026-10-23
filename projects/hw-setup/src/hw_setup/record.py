@@ -29,6 +29,8 @@ calibration gate runs first, also under ``--dry-run``. Then:
 - A root that exists with incomplete metadata (say, after a crash) can be
   neither created nor resumed. It is named as such, with an ``mv`` command to
   set it aside; nothing is deleted.
+- ``--robot.max_relative_target`` is always passed, from ``--max-step``
+  (default 5.0), as in ``so101-teleop``.
 - A new dataset whose name starts with ``eval_`` is refused, as LeRobot does
   when it creates one (scripts/lerobot_record.py L431-436). Resume has no
   such check there, so an ``eval_`` dataset can be resumed.
@@ -45,7 +47,11 @@ from datetime import datetime
 from pathlib import Path
 
 from hw_setup.lerobot_argv import format_command, record_argv
-from hw_setup.teleop import calibration_problems
+from hw_setup.teleop import (
+    add_max_step_argument,
+    calibration_problems,
+    describe_max_step,
+)
 from hw_setup.workspace import WorkspaceError, find_workspace_root, load_local_config
 
 PROG = "so101-record"
@@ -141,6 +147,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--display", action="store_true", help="show the data live (--display_data)"
     )
+    add_max_step_argument(parser)
     parser.add_argument(
         "--dry-run", action="store_true", help="run the checks, print the command"
     )
@@ -251,6 +258,7 @@ def main(
             repo_id=args.repo_id,
             single_task=args.task,
             num_episodes=args.episodes,
+            max_relative_target=args.max_step,
             dataset_root=dataset_root,
             episode_time_s=args.episode_time_s,
             reset_time_s=args.reset_time_s,
@@ -272,6 +280,7 @@ def main(
     print(f"Task: {args.task}")
     print(f"Episodes: {args.episodes}")
     print("Push to Hub: no")
+    print(describe_max_step(args.max_step, PROG))
     print(f"Command: {format_command(command)}")
     if args.dry_run:
         print("Dry run: nothing was run.")

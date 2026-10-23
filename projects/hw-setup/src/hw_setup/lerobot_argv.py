@@ -26,8 +26,22 @@ parse every argv with LeRobot's own draccus config classes.
   ``episode_time_s``, ``reset_time_s``, ``num_episodes``, ``push_to_hub``:
   configs/dataset.py L27-43 (``DatasetRecordConfig``); ``--dataset.no_stamp``:
   configs/dataset.py L76. ``--resume``: scripts/lerobot_record.py L190.
+- ``--robot.max_relative_target``: config_so_follower.py L33-36,
+  ``float | dict[str, float] | None``, default None (no cap). It is applied
+  in so_follower.py L223-226 ``send_action``: the present position is read
+  and ``ensure_safe_goal_position`` (robots/utils.py L91-126) clamps
+  ``goal - present`` to ``±cap`` for each joint, on every update. Units are
+  the follower's normalised units: degrees for the five body joints when
+  ``use_degrees`` is True (the default, config_so_follower.py L42;
+  so_follower.py L50), and percent of the calibrated range for the gripper,
+  which is always ``RANGE_0_100`` (so_follower.py L59). A float applies to
+  every joint; ``robots/utils.py`` L96 tests ``isinstance(..., float)`` and
+  raises ``TypeError`` for anything else, and draccus parses ``5`` as
+  ``5.0``. A dict must name every joint (L99-100), so only the float is
+  built here. ``null`` parses to None.
 """
 
+import math
 import shlex
 from pathlib import Path
 
@@ -91,6 +105,19 @@ def _pair_args(config: MachineConfig, repo_root: Path, cameras: bool) -> list[st
     return args + _arm_args(config, ArmRole.LEADER, repo_root)
 
 
+def max_relative_target_arg(value: float | None) -> str:
+    """``--robot.max_relative_target``; None is passed as ``null`` (no cap).
+
+    The flag is always named, so no command is built without a decision on
+    the cap. A value that is not a positive, finite number is refused.
+    """
+    if value is None:
+        return "--robot.max_relative_target=null"
+    if not (math.isfinite(value) and value > 0):
+        raise ValueError(f"max_relative_target must be more than 0, got {value}")
+    return f"--robot.max_relative_target={float(value)}"
+
+
 def setup_motors_argv(
     config: MachineConfig, role: ArmRole, repo_root: Path
 ) -> list[str]:
@@ -107,11 +134,20 @@ def teleoperate_argv(
     config: MachineConfig,
     repo_root: Path,
     *,
+    max_relative_target: float | None,
     cameras: bool = True,
     display_data: bool = False,
 ) -> list[str]:
-    """``lerobot-teleoperate``: the leader drives the follower."""
-    argv = ["lerobot-teleoperate", *_pair_args(config, repo_root, cameras)]
+    """``lerobot-teleoperate``: the leader drives the follower.
+
+    ``max_relative_target`` caps how far each follower joint moves per update
+    (see the module docstring for units); None passes ``null``, no cap.
+    """
+    argv = [
+        "lerobot-teleoperate",
+        *_pair_args(config, repo_root, cameras),
+        max_relative_target_arg(max_relative_target),
+    ]
     if display_data:
         argv.append("--display_data=true")
     return argv
@@ -124,6 +160,7 @@ def record_argv(
     repo_id: str,
     single_task: str,
     num_episodes: int,
+    max_relative_target: float | None,
     dataset_root: Path | None = None,
     episode_time_s: float | None = None,
     reset_time_s: float | None = None,
@@ -138,10 +175,14 @@ def record_argv(
 
     Options left as None are not passed, so LeRobot's defaults apply (note
     that LeRobot pushes to the Hub by default). ``no_stamp`` stops LeRobot
-    appending a date-time tag to ``repo_id`` on a new dataset. No safety
-    rules are applied.
+    appending a date-time tag to ``repo_id`` on a new dataset.
+    ``max_relative_target`` is as in ``teleoperate_argv``.
     """
-    argv = ["lerobot-record", *_pair_args(config, repo_root, cameras)]
+    argv = [
+        "lerobot-record",
+        *_pair_args(config, repo_root, cameras),
+        max_relative_target_arg(max_relative_target),
+    ]
     argv += [
         f"--dataset.repo_id={repo_id}",
         f"--dataset.single_task={single_task}",
