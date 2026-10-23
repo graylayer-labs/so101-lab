@@ -1,0 +1,401 @@
+"""``so101-eval``: run a trained policy on the follower and score each trial.
+
+Each trial is one ``lerobot-rollout --strategy.type=episodic`` run of one
+episode (``act_policy.rollout_argv``); the owner scores it at a prompt when
+it ends and the score is appended to ``outputs/eval/<run>/trials.jsonl``
+(``act_policy.trials``). The first trial creates the eval dataset and later
+ones resume it, so every episode's video ends up in one local dataset.
+
+Before anything runs, also under ``--dry-run``:
+
+- the follower's calibration passes (``hw_setup.teleop.calibration_problems``
+  for the follower only: no leader is used, see ``act_policy.rollout_argv``);
+- the policy folder holds a LeRobot checkpoint and its training dataset's
+  metadata can be read (``act_policy.policy_check.load_policy``);
+- the cameras in ``configs/local.yaml`` match the policy and the training
+  dataset in name, size and fps (``camera_problems``);
+- the device is available (``auto``: cuda, then mps, then cpu); on mps the
+  control-rate risk is printed;
+- the dataset root follows ``so101-record``'s rules
+  (``hw_setup.record.dataset_root_problem``): outside the workspace, new
+  unless ``--resume``, and never a half-written one. The default is
+  ``$HF_LEROBOT_HOME/local/rollout_<run>``.
+
+The follower's start pose is not checked: no safe pose is defined in the
+repo and the leader is not connected to compare with. LeRobot captures the
+pose at startup and drives the follower back to it at the end (see
+``act_policy.rollout_argv``), so each trial asks for ``y`` to confirm the
+follower is at its rest pose before it starts.
+
+``--dataset.push_to_hub=false`` is always passed and the movement cap
+(``--max-step``, default ``hw_setup.teleop.DEFAULT_MAX_STEP``) always named.
+``--dry-run`` prints the plan and the exact command, and runs nothing.
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from act_policy.policy_check import (
+    Policy,
+    PolicyError,
+    available_devices,
+    camera_problems,
+    load_policy,
+    run_name,
+    select_device,
+)
+from act_policy.rollout_argv import ROLLOUT_PREFIX, rollout_argv
+from act_policy.trials import (
+    Ask,
+    append_trial,
+    ask_score,
+    count_trials,
+    trial_record,
+    trials_path,
+)
+from hw_setup.lerobot_argv import format_command
+from hw_setup.record import (
+    INFO_FILE,
+    dataset_root_problem,
+    default_lerobot_home,
+)
+from hw_setup.teleop import (
+    add_max_step_argument,
+    calibration_problems,
+    describe_max_step,
+)
+from hw_setup.workspace import WorkspaceError, find_workspace_root, load_local_config
+from so101.arm import ArmRole
+
+PROG = "so101-eval"
+REPO_OWNER = "local"
+_REPO_ID = re.compile(r"[^/\s]+/[^/\s]+")
+
+Runner = Callable[[list[str]], int]
+
+MPS_WARNING = (
+    "WARNING: running the policy on mps. A published SO-101 ACT eval measured "
+    "about 15 Hz on an Apple M4 with mps and 40% success, against 30 Hz and "
+    "90% on CUDA for the same checkpoint. LeRobot logs 'Record loop is running "
+    "slower' whenever a step misses the target fps. If the loop runs below "
+    "about 25 Hz, write the rate down with the trials and rerun one diagnostic "
+    "with --device cpu or without --display."
+)
+CPU_WARNING = "WARNING: running the policy on cpu; expect a slow control loop."
+START_POSE_WARNING = (
+    "WARNING: the follower's start pose is not checked. LeRobot records the "
+    "pose the follower is in when it connects and drives it back there after "
+    "each trial, so put it at its rest pose (the pose the training episodes "
+    "started from) before you type y."
+)
+
+
+def _run(argv: list[str]) -> int:
+    return subprocess.run(argv, check=False).returncode
+
+
+def _text(text: str) -> str:
+    if not text.strip():
+        raise argparse.ArgumentTypeError("must not be empty")
+    return text
+
+
+def _repo_id(text: str) -> str:
+    if not _REPO_ID.fullmatch(text):
+        raise argparse.ArgumentTypeError(f"expected USER/NAME, got {text!r}")
+    if not text.split("/", 1)[1].startswith(ROLLOUT_PREFIX):
+        raise argparse.ArgumentTypeError(
+            f"LeRobot's rollout needs a name starting with {ROLLOUT_PREFIX!r}, "
+            f"got {text!r}"
+        )
+    return text
+
+
+def _positive_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a whole number: {text!r}") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or more, got {value}")
+    return value
+
+
+def _positive_float(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
+    if not value > 0:
+        raise argparse.ArgumentTypeError(f"must be more than 0, got {value}")
+    return value
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=PROG,
+        description=(
+            "Run a trained LeRobot policy on the follower with lerobot-rollout, "
+            "one episode per trial, and score each trial at a prompt. Never "
+            "pushes to the Hugging Face Hub."
+        ),
+    )
+    parser.add_argument(
+        "--policy",
+        required=True,
+        type=Path,
+        help="checkpoint folder, .../checkpoints/<step>/pretrained_model",
+    )
+    parser.add_argument("--task", required=True, type=_text, help="the task text")
+    parser.add_argument(
+        "--episodes", required=True, type=_positive_int, help="trials to run"
+    )
+    parser.add_argument(
+        "--repo-id",
+        type=_repo_id,
+        help=f"eval dataset name (default: {REPO_OWNER}/rollout_<run>)",
+    )
+    parser.add_argument(
+        "--dataset-root",
+        type=Path,
+        help="where to write the eval dataset, outside the workspace "
+        "(default: $HF_LEROBOT_HOME/<repo id>)",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="add the trials to the existing eval dataset at the dataset root",
+    )
+    parser.add_argument(
+        "--train-dataset",
+        type=Path,
+        help="the dataset the policy was trained on "
+        "(default: from the checkpoint's train_config.json)",
+    )
+    parser.add_argument("--episode-time-s", type=_positive_float)
+    parser.add_argument(
+        "--reset-time-s",
+        type=_positive_float,
+        help="reset time after a re-recorded episode (left arrow)",
+    )
+    parser.add_argument(
+        "--device", choices=("auto", "cuda", "mps", "cpu"), default="auto"
+    )
+    parser.add_argument(
+        "--display", action="store_true", help="show the data live (--display_data)"
+    )
+    add_max_step_argument(parser)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="run the checks, print the plan and the command; runs nothing",
+    )
+    parser.add_argument(
+        "--config", type=Path, help="machine config (default: configs/local.yaml)"
+    )
+    return parser
+
+
+def _episodes_in(dataset_root: Path) -> int:
+    """``total_episodes`` in the dataset's ``meta/info.json``; 0 if unreadable."""
+    try:
+        return int(json.loads((dataset_root / INFO_FILE).read_text())["total_episodes"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return 0
+
+
+def _refuse(problem: str) -> int:
+    print(f"{PROG}: refusing to run: {problem}", file=sys.stderr)
+    return 1
+
+
+def _print_plan(
+    policy: Policy,
+    checkpoint: str,
+    *,
+    device: str,
+    repo_id: str,
+    dataset_root: Path,
+    resume: bool,
+    args: argparse.Namespace,
+    log: Path,
+    command: list[str],
+) -> None:
+    cameras = ", ".join(
+        f"{name} {w}x{h}" for name, (h, w) in sorted(policy.cameras.items())
+    )
+    print("Calibration checked: follower passes (the leader is not used).")
+    print(
+        f"Policy: {policy.path} ({policy.policy_type}, checkpoint {checkpoint or '-'})"
+    )
+    print(f"Trained on: {policy.dataset_repo_id} at {policy.dataset_root}")
+    print(f"Cameras checked: {cameras or 'none'} at {policy.dataset_fps} fps match")
+    print(f"Device: {device}")
+    print(
+        "Teleop: none; after each trial LeRobot returns the follower to its start pose"
+    )
+    print(f"Dataset: {repo_id} ({'resume' if resume else 'new dataset'})")
+    print(f"Dataset root: {dataset_root}")
+    print(f"Task: {args.task}")
+    print(
+        f"Trials: {args.episodes} (one lerobot-rollout each; "
+        "trials after the first add --resume=true)"
+    )
+    print("Push to Hub: no")
+    print(describe_max_step(args.max_step, PROG))
+    print(f"Trial log: {log}")
+    print(f"Command: {format_command(command)}")
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    runner: Runner = _run,
+    root: Path | None = None,
+    lerobot_home: Path | None = None,
+    ask: Ask = input,
+    available_devices: Callable[[], set[str]] = available_devices,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> int:
+    args = _parser().parse_args(argv)
+    policy_path = args.policy.expanduser().absolute()
+    run, checkpoint = run_name(policy_path)
+    repo_id = args.repo_id or f"{REPO_OWNER}/{ROLLOUT_PREFIX}{run}"
+    try:
+        workspace = root if root is not None else find_workspace_root()
+        config = load_local_config(workspace, args.config)
+        problems = calibration_problems(config, workspace, roles=(ArmRole.FOLLOWER,))
+        home = lerobot_home if lerobot_home is not None else default_lerobot_home()
+        policy = load_policy(
+            policy_path, train_dataset=args.train_dataset, lerobot_home=home
+        )
+        problems += camera_problems(config, policy)
+        if problems:
+            for problem in problems:
+                _refuse(problem)
+            return 1
+        device = select_device(args.device, available_devices())
+        if args.dataset_root is not None:
+            dataset_root = args.dataset_root.expanduser().resolve()
+        else:
+            dataset_root = (home / repo_id).resolve()
+        problem = dataset_root_problem(dataset_root, workspace, args.resume)
+        if problem:
+            return _refuse(problem)
+
+        def command(resume: bool) -> list[str]:
+            return rollout_argv(
+                config,
+                workspace,
+                policy_path=policy_path,
+                repo_id=repo_id,
+                dataset_root=dataset_root,
+                task=args.task,
+                fps=policy.dataset_fps,
+                device=device,
+                max_relative_target=args.max_step,
+                episode_time_s=args.episode_time_s,
+                reset_time_s=args.reset_time_s,
+                resume=resume,
+                display_data=args.display,
+            )
+
+        first = command(args.resume)
+    except (WorkspaceError, PolicyError, ValueError) as err:
+        print(f"{PROG}: {err}", file=sys.stderr)
+        return 1
+
+    if device == "mps":
+        print(f"{PROG}: {MPS_WARNING}", file=sys.stderr)
+    elif device == "cpu":
+        print(f"{PROG}: {CPU_WARNING}", file=sys.stderr)
+    log = trials_path(workspace, run)
+    _print_plan(
+        policy,
+        checkpoint,
+        device=device,
+        repo_id=repo_id,
+        dataset_root=dataset_root,
+        resume=args.resume,
+        args=args,
+        log=log,
+        command=first,
+    )
+    if args.dry_run:
+        print("Start pose: not checked; each trial asks for y first.")
+        print("Dry run: nothing was run.")
+        return 0
+
+    print(f"{PROG}: {START_POSE_WARNING}", file=sys.stderr)
+    context: dict[str, Any] = {
+        "policy": str(policy_path),
+        "policy_resolved": str(policy_path.resolve()),
+        "run": run,
+        "checkpoint": checkpoint,
+        "task": args.task,
+        "device": device,
+        "fps": policy.dataset_fps,
+        "episode_time_s": args.episode_time_s,
+        "max_relative_target": args.max_step,
+        "dataset_repo_id": repo_id,
+        "dataset_root": str(dataset_root),
+    }
+    scored: list[bool] = []
+    for i in range(args.episodes):
+        resume = args.resume or i > 0
+        if resume:
+            problem = dataset_root_problem(dataset_root, workspace, resume=True)
+            if problem:
+                return _refuse(problem)
+        trial = count_trials(log) + 1
+        try:
+            answer = ask(
+                f"Trial {trial} ({i + 1} of {args.episodes}): is the follower at "
+                "its rest pose, the cube placed and the table clear? "
+                "Type y to start: "
+            )
+        except EOFError:
+            answer = ""
+        if answer.strip().lower() != "y":
+            print("Stopped before the trial; nothing was run.")
+            break
+        before = _episodes_in(dataset_root)
+        code = runner(command(resume))
+        if code != 0:
+            print(
+                f"{PROG}: lerobot-rollout exited with {code}; trial {trial} "
+                "is not scored. Stopping.",
+                file=sys.stderr,
+            )
+            return code
+        after = _episodes_in(dataset_root)
+        try:
+            score = ask_score(ask)
+        except EOFError:
+            print(
+                f"\n{PROG}: input ended; trial {trial} is not scored.", file=sys.stderr
+            )
+            return 1
+        record = trial_record(
+            score,
+            trial=trial,
+            episode_index=after - 1 if after > before else None,
+            now=now(),
+            context=context,
+        )
+        append_trial(log, record)
+        scored.append(score.success)
+        print(f"Trial {trial} logged to {log}")
+    print(f"This session: {sum(scored)}/{len(scored)} succeeded. Log: {log}")
+    return 0
+
+
+def cli() -> None:
+    sys.exit(main())
