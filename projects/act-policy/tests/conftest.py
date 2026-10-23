@@ -9,7 +9,8 @@ the ones ``lerobot-train`` leaves in ``checkpoints/<step>/pretrained_model``
 nothing loads the weights). The training dataset's ``meta/info.json`` is
 written by ``LeRobotDatasetMetadata.create`` from the features LeRobot
 derives from the robot (``hw_to_dataset_features``), so its camera entries
-have the real shape and names. Nothing is trained.
+have the real shape and names. Nothing is trained here; a real 4-step
+checkpoint goes through the eval preflight in ``test_train.py``.
 """
 
 import shutil

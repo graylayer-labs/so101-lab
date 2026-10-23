@@ -2,6 +2,7 @@
 
 import json
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -13,10 +14,14 @@ from pathlib import Path
 import draccus
 import numpy as np
 import pytest
+from lerobot.configs import parser
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.act.configuration_act import ACTConfig
+from lerobot.scripts import lerobot_rollout
 
-from act_policy import train
+from act_policy import evaluate, train
+from act_policy.evaluate import RunResult
+from act_policy.policy_check import load_policy
 from act_policy.train import (
     DATASET_RECORD,
     DEFAULT_RUN_CONFIG,
@@ -628,10 +633,11 @@ TINY_ACT = [
 ]
 
 
-def test_a_real_cpu_micro_train(
-    root: Path, home: Path, dataset: Path, tmp_path: Path
-) -> None:
-    """Runs lerobot-train for 4 steps on CPU (about 3 s on an M4), offline."""
+def micro_train(root: Path, home: Path, tmp_path: Path) -> tuple[int, list[str]]:
+    """so101-train running lerobot-train for 4 steps on CPU, offline.
+
+    Returns the exit code and each lerobot-train run's output.
+    """
     config = tmp_path / "micro.yaml"
     config.write_text(
         "job_name: micro\n"
@@ -664,9 +670,98 @@ def test_a_real_cpu_micro_train(
         now=NOW,
         device_available=lambda d: d == "cpu",
     )
+    return code, logs
+
+
+def test_a_real_cpu_micro_train(
+    root: Path, home: Path, dataset: Path, tmp_path: Path
+) -> None:
+    """Runs lerobot-train for 4 steps on CPU (about 3 s on an M4), offline."""
+    code, logs = micro_train(root, home, tmp_path)
     assert code == 0, logs[-1][-3000:]
     checkpoint = run_dir(root) / LEROBOT_DIR / "checkpoints" / "last"
     assert (checkpoint / "pretrained_model" / "model.safetensors").is_file()
     assert (run_dir(root) / DATASET_RECORD).is_file()
     losses = re.findall(r"step:\d+ .*? loss:([0-9.]+)", logs[-1])
     assert len(losses) == 4
+
+
+# --- the trained checkpoint through so101-eval's preflight ----------------
+
+REPO = Path(__file__).parents[3]
+
+
+def eval_workspace(root: Path) -> None:
+    """Add what so101-eval needs to ``root``: the follower's calibration and a
+    local.yaml whose one camera is the tiny dataset's (front, 32x32, 10 fps).
+    """
+    follower = root / "hardware" / "calibration" / "follower"
+    follower.mkdir(parents=True)
+    shutil.copy(REPO / "hardware" / "calibration" / "follower" / "main.json", follower)
+    (root / "configs").mkdir()
+    (root / "configs" / "local.yaml").write_text(
+        "arms:\n"
+        "  leader: {id: main, port: /dev/cu.usbmodem0000000001}\n"
+        "  follower: {id: main, port: /dev/cu.usbmodem0000000002}\n"
+        "cameras:\n"
+        f"  front: {{index: 0, width: 32, height: 32, fps: {FPS}}}\n"
+    )
+
+
+def test_a_micro_trained_checkpoint_passes_the_eval_preflight(
+    root: Path,
+    home: Path,
+    dataset: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real 4-step checkpoint through policy_check and so101-eval --dry-run."""
+    code, logs = micro_train(root, home, tmp_path)
+    assert code == 0, logs[-1][-3000:]
+    checkpoint = run_dir(root) / LEROBOT_DIR / "checkpoints" / "last"
+    pretrained = checkpoint / "pretrained_model"
+
+    policy = load_policy(pretrained, lerobot_home=home)
+    assert policy.policy_type == "act"
+    assert policy.cameras == {"front": (32, 32)}
+    assert policy.dataset_root.resolve() == dataset.resolve()
+    assert policy.dataset_fps == FPS
+    assert policy.dataset_cameras == {"front": (32, 32, FPS)}
+    assert policy.n_action_steps == 4  # TINY_ACT's, read back from config.json
+
+    eval_workspace(root)
+    capsys.readouterr()
+
+    def no_run(argv: list[str]) -> RunResult:
+        raise AssertionError("--dry-run ran a command")
+
+    def no_input(prompt: str = "") -> str:
+        raise AssertionError("--dry-run asked a question")
+
+    args = ["--policy", str(pretrained), "--task", "pick", "--episodes", "1"]
+    assert (
+        evaluate.main(
+            [*args, "--device", "cpu", "--dry-run"],
+            runner=no_run,
+            root=root,
+            lerobot_home=home,
+            ask=no_input,
+            available_devices=lambda: {"cpu"},
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert f"Cameras checked: front 32x32 at {FPS} fps match" in out
+    assert f"Dataset: local/rollout_{STAMP}_cube (new dataset)" in out
+    assert "Dry run: nothing was run." in out
+
+    # LeRobot's own rollout parser loads the real checkpoint from the command.
+    command = shlex.split(out.split("Command: ", 1)[1].splitlines()[0])
+    monkeypatch.setattr(sys, "argv", command)
+    cli_args = parser.filter_path_args(["policy"], command[1:])
+    cfg = draccus.parse(config_class=lerobot_rollout.RolloutConfig, args=cli_args)
+    assert isinstance(cfg.policy, ACTConfig)
+    assert cfg.policy.n_action_steps == 4
+    assert cfg.device == "cpu"
+    assert cfg.fps == FPS
