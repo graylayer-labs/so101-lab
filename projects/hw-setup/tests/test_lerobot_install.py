@@ -13,3 +13,9 @@ def test_lerobot_imports_at_the_pinned_version():
 def test_lerobot_record_imports():
     # Needs the `dataset` extra (datasets, av); lerobot[feetech] alone fails.
     import lerobot.scripts.lerobot_record  # noqa: F401
+
+
+def test_rerun_imports_for_display():
+    # `so101-teleop --display` and `so101-record --display` need the `viz`
+    # extra; without it lerobot-teleoperate exits after connecting the arms.
+    import rerun  # noqa: F401
