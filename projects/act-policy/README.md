@@ -125,7 +125,10 @@ count from the eval dataset, that gives the mean rate:
 `frames / (sum of 1/hz over late steps + other steps / fps)`. It is printed
 after each trial and written as `control_hz`. Below 25 Hz a warning asks you
 to note it with the result (#76) and do one diagnostic rerun with
-`--device cpu` or without `--display` (#82).
+`--device cpu` or without `--display` (#82). The movement cap costs rate
+too: with `--max-step` set, LeRobot reads the follower's position before
+every move (`so_follower.py` L221-226, "Slower fps expected"). Keep it on,
+and say so next to any rate.
 
 `--dataset.push_to_hub=false` is always passed. `--max-step` caps each
 follower move as in `so101-teleop` (default 5). The fps is the training

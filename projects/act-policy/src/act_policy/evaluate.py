@@ -114,13 +114,20 @@ INTERRUPTED = 130  # the shell's exit status for Ctrl-C
 
 Runner = Callable[[list[str]], RunResult]
 
+# so_follower.py L221-226: with max_relative_target set, every send_action
+# first reads Present_Position ("Slower fps expected").
+CAP_COST_NOTE = (
+    "The movement cap (--max-step) also costs rate: it adds a bus read of the "
+    "follower's position on every step. It is a safety limit, so keep it, but "
+    "say it was on when you compare rates."
+)
 MPS_WARNING = (
     "WARNING: running the policy on mps. A published SO-101 ACT eval measured "
     "about 15 Hz on an Apple M4 with mps and 40% success, against 30 Hz and "
     "90% on CUDA for the same checkpoint. LeRobot logs 'Record loop is running "
     "slower' whenever a step misses the target fps. If the loop runs below "
     "about 25 Hz, write the rate down with the trials and rerun one diagnostic "
-    "with --device cpu or without --display."
+    f"with --device cpu or without --display. {CAP_COST_NOTE}"
 )
 CPU_WARNING = "WARNING: running the policy on cpu; expect a slow control loop."
 START_POSE_WARNING = (
@@ -576,7 +583,8 @@ def main(
                 print(
                     f"{PROG}: WARNING: trial {trial} ran at {rate.hz:.1f} Hz, below "
                     f"{LOW_HZ:.0f} Hz. Note it with the result (#76); #82 asks for "
-                    "one diagnostic rerun with --device cpu or without --display.",
+                    "one diagnostic rerun with --device cpu or without --display. "
+                    f"{CAP_COST_NOTE}",
                     file=sys.stderr,
                 )
             try:

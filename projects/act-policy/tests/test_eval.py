@@ -252,6 +252,7 @@ def test_mps_prints_the_control_rate_risk(
     captured = capsys.readouterr()
     assert "Device: mps" in captured.out
     assert "15 Hz" in captured.err and "25 Hz" in captured.err
+    assert "movement cap" in captured.err
 
 
 def test_dataset_root_inside_the_workspace_is_refused(
@@ -437,6 +438,9 @@ def test_the_control_rate_is_logged_per_trial(
     captured = capsys.readouterr()
     assert captured.err.count("below 25 Hz") == 1
     assert "trial 1 ran at 15.0 Hz" in captured.err
+    # The cap reads the follower's position on every step (so_follower.py
+    # L221-226, "Slower fps expected"), so the advice names it.
+    assert "movement cap" in captured.err and "bus read" in captured.err
     assert "Control rate: 15.0 Hz" in captured.out
     assert "Control rate: 30.0 Hz" in captured.out
 
