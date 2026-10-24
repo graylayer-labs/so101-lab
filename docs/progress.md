@@ -8,7 +8,8 @@ Both arms were recalibrated with `so101-calibrate` from the same pose, so
 the same physical pose now reads as the same numbers on both. Before, the
 wrist roll read half a turn apart and the elbow 13° apart, which is why the
 follower jumped when teleop started. After, `so101-teleop` ran on the real
-arms with no snap, with the wrist camera live in the viewer.
+arms with no snap, first without the camera and then with the wrist camera
+live in the viewer.
 
 | Claim | Number | Where |
 |---|---|---|
@@ -18,12 +19,12 @@ arms with no snap, with the wrist camera live in the viewer.
 | Largest gap the next day, after a power cycle | 2.5° | `outputs/hw/alignment-20261024T164739Z.json` (local) |
 | Wrist camera | 640x480 at 30 fps, measured | `configs/local.yaml` (local) |
 | `so101-align` on the real arms | refused at 174° before, passed at 3.7° after | the two files above |
-| `so101-doctor --open-cameras` | nothing failed, both ports and the wrist camera | run 2026-10-24 |
+| `so101-doctor --open-cameras` | nothing failed, both ports and the wrist camera | `outputs/hw/doctor-20261024.txt` (local) |
 
 **Ports.** Found with the same unplug test `so101-find-ports` uses (unplug
 the leader; the port that vanishes is the leader's), done by hand because
-the agent's shell cannot answer the script's ENTER prompts. Leader
-`/dev/cu.usbmodem5B8E1127961`, follower `/dev/cu.usbmodem5B8E1139851`.
+the agent's shell cannot answer the script's ENTER prompts. Both
+are `/dev/cu.usbmodem*` names, kept in the gitignored `configs/local.yaml`.
 
 **Camera.** One wrist camera on the follower's gripper (`USB2.0_CAM1`),
 shown live in `so101-teleop --display` after the Rerun viewer was added

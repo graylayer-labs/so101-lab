@@ -15,7 +15,7 @@ same version.
 - Done: the bring-up tools (#13-#18), teleop safety (#63, #64: a 5° per-update cap and a read-only `so101-align` check), the BOM and the runbook [`docs/setup.md`](docs/setup.md). Tested with fakes only.
 - Done: the real arms run `so101-teleop` with no snap, after a matched recalibration (largest gap 3.7°, was 174° at the wrist roll), with the wrist camera live (#31, #32).
 - Doing: the first 5-episode dataset (#33) and the hardware notes in `docs/setup.md`.
-- Done: Phase 2 tooling, tested with fakes, in [`projects/act-policy`](projects/act-policy): `so101-train` (#79) and `so101-eval` (#81) for ACT (#68).
+- Built, tested with fakes, waiting on the arms: Phase 2 tooling in [`projects/act-policy`](projects/act-policy): `so101-train` (#79) and `so101-eval` (#81) for ACT (#68).
 - Next: record 50 episodes, train ACT, score 10 trials against the pre-registered 5/10 (#76-#83); then SmolVLA (#69).
 
 ## Pipeline
