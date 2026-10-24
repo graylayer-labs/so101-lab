@@ -89,8 +89,10 @@ unless a step fails. Use short questions they can answer in one word.
    uv run so101-teleop --display
    ```
 
-   with: clear the area, hand near the follower's power, one Ctrl-C to
-   stop (a second force-exits mid-move).
+   with: clear the area and keep a hand near the follower's power. To stop,
+   bring the follower to rest on the table, then press Ctrl-C once. LeRobot
+   switches the follower's torque off when it disconnects, so it goes limp
+   at once and falls if it is held up in the air.
 
 ## Fixes for a failed check
 
@@ -101,14 +103,14 @@ unless a step fails. Use short questions they can answer in one word.
   than two ports: a cable or board is not connected.
 - **Camera FAIL or wrong picture.** Indices move when a camera is plugged
   in or an iPhone is near. Rerun the snapshot with indices 0 to 3 in place
-  of the config, pick the frame with the gripper jaws, and set `index` in
-  `configs/local.yaml`.
+  of the config (one `VideoCapture(i)` per `i` in 0-3, same loop), pick
+  the frame with the gripper jaws, and set `index` in `configs/local.yaml`.
 - **"camera access has been denied".** The terminal app lost its camera
   permission. OpenCV only checks it and never asks, so the owner runs this
   in their pane and clicks Allow (fixed it on 2026-10-23):
 
   ```bash
-  tccutil reset Camera $__CFBundleIdentifier
+  tccutil reset Camera "${__CFBundleIdentifier:?unset: name the app, e.g. com.apple.Terminal}"
   printf '%s\n' 'import AVFoundation' 'let s = DispatchSemaphore(value: 0)' \
     'AVCaptureDevice.requestAccess(for: .video) { ok in print("granted:", ok); s.signal() }' \
     '_ = s.wait(timeout: .now() + 60)' > /tmp/camauth.swift
@@ -122,7 +124,9 @@ unless a step fails. Use short questions they can answer in one word.
 
 ## Full path (first setup, reassembly or servo swap)
 
-F1. Ports: as the port fix above, writing `configs/local.yaml` from
+F1. Ports: ask the owner to run `uv run so101-find-ports` in their pane
+(it prompts for each unplug); if they would rather not, do the port fix
+above by hand, writing `configs/local.yaml` from
 `configs/example.yaml`. Check it with
 `so101.machine_config.parse_machine_config`.
 
@@ -147,7 +151,12 @@ step 4: every joint within 5 degrees (2026-10-23: largest 3.7). Commit the
 new `hardware/calibration/<role>/main.json` on a branch.
 
 F5. First teleop with the owner: `uv run so101-teleop --no-cameras`, then
-`--display`.
+`--display`, with the same hand-off as quick path step 5 (rest the
+follower on the table before Ctrl-C).
+
+Before any `so101-record`, rerun quick path steps 1 and 2: if the wrist
+camera is unplugged, the recording silently uses whichever camera has its
+index.
 
 ## Finish
 
