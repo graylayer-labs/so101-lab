@@ -5,9 +5,9 @@ Each step below says what its script checks before it asks LeRobot to touch
 a servo, the exact command, what the dry run prints, and what to do when it
 fails.
 
-**None of the `so101-*` scripts has run on the arms yet.** Every output block
-is a `--dry-run` (or an error case) run on a laptop with no arm attached. The
-arms already have a first calibration (#39), made outside these scripts. See
+**On 2026-10-23 and 2026-10-24 Steps 1, 4, 5 and 6 ran on the real arms**
+(notes below each step). Output blocks are still mostly `--dry-run`s or
+error cases from a laptop with no arm attached. See
 [What has not been tested on hardware](#what-has-not-been-tested-on-hardware).
 
 Outputs are shown with `<root>` for the workspace folder and `<home>` for the
@@ -32,6 +32,18 @@ Backup file names carry a UTC time stamp, so yours will differ.
    macOS asks. Allow it for the terminal app you run these commands from
    (System Settings > Privacy & Security > Camera), then restart the terminal.
    If you refused once, the camera stays closed until you switch it on there.
+   OpenCV only checks the permission and never asks for it, so with OpenCV
+   alone no prompt appears and a `tccutil reset Camera` is not enough. What
+   worked on 2026-10-23: reset, then ask through AVFoundation, in the
+   terminal you run the scripts from, and click Allow:
+
+   ```bash
+   tccutil reset Camera "${__CFBundleIdentifier:?unset: name the app, e.g. com.apple.Terminal}"
+   printf '%s\n' 'import AVFoundation' 'let s = DispatchSemaphore(value: 0)' \
+     'AVCaptureDevice.requestAccess(for: .video) { ok in print("granted:", ok); s.signal() }' \
+     '_ = s.wait(timeout: .now() + 60)' > /tmp/camauth.swift
+   swift /tmp/camauth.swift
+   ```
    Only `so101-doctor --open-cameras`, `so101-teleop` and `so101-record` open
    cameras.
 5. **Port names.** On macOS each USB serial port has two names,
@@ -119,6 +131,11 @@ uv run so101-find-ports
 It asks you to unplug the leader's USB cable and press Enter, then to plug it
 back in, then the same for the follower. The port that vanished is that
 arm's. Afterwards open `configs/local.yaml` and check the two ports differ.
+
+On the real arms (2026-10-23) the same unplug test was done by hand, because
+the script waits for ENTER and a Claude session's shell cannot press it.
+Run the script in your own terminal. Both boards enumerate on USB power
+alone, so the supplies can stay off for this step.
 
 **If it fails** (message on stderr, exit 1):
 
@@ -350,6 +367,15 @@ After `c` (or with no file yet), LeRobot's prompts are, in order (quoted from
 
 LeRobot then prints `Calibration saved to <path>`.
 
+**Pose both arms the same for the middle pose.** Each joint's zero is the
+pose you hold at the first ENTER, and LeRobot never sweeps `wrist_roll`, so
+its zero is wherever the wrist was turned. If the leader's middle pose
+differs from the follower's, the arms disagree by exactly that much. On
+2026-10-23 the first calibrations had the wrist rolls 174° apart and the
+elbows 13° apart, which is why teleop snapped. After calibrating both from
+the same pose (upright, elbow about 90°, wrist straight, gripper closed),
+every joint was within 3.7°, and still within 2.5° the next day.
+
 After a successful run the script loads the new file and prints a "Changes
 per joint" table against the old file (first calibration: "no previous file,
 so no backup and no diff"). It runs the sanity checks, prints
@@ -420,8 +446,14 @@ PASS  cameras: 2 listed, 2 configured (compares counts only)
 1 failed: ports
 ```
 
-With the arms attached the ports line should turn PASS, and the script ends
-with `Nothing failed.` (exit 0). That all-PASS output has not been seen yet.
+With the arms attached the ports line turns PASS, and the script ends with
+`Nothing failed.` (exit 0), as on 2026-10-24 with both arms and the wrist
+camera.
+
+**A PASS does not prove it opened the right camera.** On macOS the OpenCV
+indices follow plug order. With the wrist camera unplugged, the MacBook
+camera took index 0 and `--open-cameras` still passed. Check the camera's
+name is in the `listed by the OS` line, and look at a frame.
 
 **If it fails:**
 
@@ -495,12 +527,24 @@ uv run so101-teleop --display        # also show the data live
 
 Our advice, not from the upstream guide: try `--no-cameras` first, so a camera problem cannot hide an arm problem.
 
+On the real arms (2026-10-23) the alignment check refused before the
+recalibration and passed after it; teleop then ran with no snap.
+`--display` opens a Rerun window; it needs LeRobot's `viz` extra, which
+hw-setup installs. The wrist camera's picture was blurred until its lens was
+twisted to focus at the gripper.
+
+**To stop teleop, rest the follower on the table first, then press Ctrl-C.**
+LeRobot switches the follower's torque off when it disconnects, so it goes
+limp at once and falls if it is held up.
+
 **If it fails:**
 
 | What you see | What to do |
 |---|---|
 | `refusing to run: leader arm (id): calibration missing: <path>` | No file for that id. Run Step 4 for that arm, or fix `arms.<role>.id` in `configs/local.yaml`. |
 | `refusing to run: ... calibration is not valid JSON`, or a sanity-check message | Run Step 4 for that arm. |
+| `ImportError: 'rerun-sdk' is required` with `--display` | Run `uv sync --dev --all-packages`; the `viz` extra is a dependency of hw-setup. |
+| Camera picture blurred | Peel any film off the lens, then twist the lens barrel while watching `--display`. |
 | `machine config not found` | No `configs/local.yaml`. Run Step 1. |
 | LeRobot cannot open a port, or the follower does not move | Run `so101-doctor` (Step 5), then check the supply and cables. |
 | `refusing to run: leader and follower disagree (<joints>)` and a table | Run `so101-align --watch` and pose the arms until every row is `ok`. If a joint stays `OVER` in the same pose, recalibrate that arm (Step 4). |
@@ -694,29 +738,30 @@ already.
 | `so101-record`: `incomplete dataset` | Folder exists without full metadata, for example after a crash. | Run the printed `mv`, then record again. |
 | `machine config not found: .../configs/local.yaml` | `local.yaml` is gitignored and not created yet. | `so101-find-ports`, or `cp configs/example.yaml configs/local.yaml` and edit. |
 | `so101-doctor` cameras FAIL on macOS | Camera permission. | System Settings > Privacy & Security > Camera, switch on your terminal, restart it. |
+| `camera access has been denied` and no prompt ever appears | OpenCV checks the permission but never asks for it. | The `tccutil reset` and `swift` commands in [Before you start](#before-you-start), step 4. |
+| The camera shows the wrong picture | OpenCV indices on macOS follow plug order. | Plug the camera in, look at a frame from each index and set `index` in `configs/local.yaml`. |
 | Motor or calibration errors after changing a servo | The servo's ID or calibration no longer matches. | Step 2 for that arm, then Step 4. |
 
 ## What has not been tested on hardware
 
-None of the `so101-*` scripts has run on the arms. Every script is tested
-with fakes, and every output above is a dry run or an error case with no arm
-attached. The arms themselves were assembled, given IDs and calibrated
-before these scripts existed (#39), outside them.
+Every script is tested with fakes. On 2026-10-23 and 2026-10-24 Steps 1
+(by hand), 4, 5 and 6 ran on the real arms. The arms were assembled and
+given IDs before these scripts existed (#39), outside them.
 
 | Step | Tested | Not yet seen |
 |---|---|---|
-| 1. `so101-find-ports` | Unplug and replug logic with fake port lists | Real ports on the Mac; the `cu.*` names it writes; LeRobot accepting both `tty.*` and `cu.*` names |
+| 1. `so101-find-ports` | Unplug and replug logic with fake port lists; the same test done by hand on the real arms | The script itself on the real arms; LeRobot accepting a `tty.*` name |
 | 2. `so101-setup-motors` | Command line parsed by LeRobot's own config classes | A real run: the per-motor prompts and the IDs written |
 | 3. Assembly | - | Not covered by any script; the arms were built before this runbook |
-| 4. `so101-calibrate` | Backup, diff, checks and failure paths with a fake LeRobot | A real run and the ENTER and `c` prompts; a real `--move-corrupt`; the Ctrl-C and half-written-file restore |
-| 5. `so101-doctor` | Checks with fakes; ran on a laptop with no arm | An all-PASS run; `--open-cameras` on the real cameras; the macOS camera permission prompt |
-| 6. `so101-teleop` | Gate and command line | The follower tracking the leader; `--display` |
+| 4. `so101-calibrate` | Backup, diff, checks and failure paths with a fake LeRobot; a real `c` run on both arms (2026-10-23) | A real `--move-corrupt`; the Ctrl-C and half-written-file restore |
+| 5. `so101-doctor` | Checks with fakes; all PASS on the real arms with `--open-cameras` | That it opened the right camera (it cannot tell yet) |
+| 6. `so101-teleop` | Gate and command line; on the real arms with and without the camera, and `--display` | - |
 | 7. `so101-record` | Gate, dataset checks and command line, parsed by LeRobot's `RecordConfig` | A real episode written, and `--resume` on a real dataset |
 | 8. `so101-eval` | Gates, trial log and command line, parsed by LeRobot's `RolloutConfig` with a checkpoint saved by LeRobot's own config savers | A real rollout; the return to the start pose; the control rate on mps (#81) |
 
-The calibration files in `hardware/calibration/` are the owner's first
-calibrations from 2026-10-22 (#39), made outside the scripts. They pass the
-checks.
+The calibration files in `hardware/calibration/` were made with
+`so101-calibrate` on 2026-10-23, from a matched pose. They replace the first
+calibrations of 2026-10-22 (#39), which disagreed.
 
 ## Progress checklist
 
@@ -726,11 +771,11 @@ Issue numbers are the owner's steps on the board.
 - [ ] Every row of [`hardware/bom.md`](../hardware/bom.md) filled in and received; each servo's voltage checked against its supply (#29).
 - [ ] Printed parts for both arms (#29).
 - [ ] `uv sync --dev --all-packages` and `git lfs install` done.
-- [ ] Ports found; `configs/local.yaml` written.
+- [x] Ports found; `configs/local.yaml` written.
 - [ ] Servo IDs 1 to 6 set on the leader and on the follower (#30).
 - [ ] Both arms assembled; cables routed so every joint has its full range (#30).
-- [ ] Follower calibrated; file in `hardware/calibration/follower/` (#31).
-- [ ] Leader calibrated; file in `hardware/calibration/leader/` (#31).
-- [ ] `so101-doctor --open-cameras` all PASS.
-- [ ] Teleoperation: the follower tracks the leader (#32).
+- [x] Follower calibrated; file in `hardware/calibration/follower/` (#31).
+- [x] Leader calibrated; file in `hardware/calibration/leader/` (#31).
+- [x] `so101-doctor --open-cameras` all PASS.
+- [x] Teleoperation: the follower tracks the leader (#32).
 - [ ] First dataset recorded locally (#33).
