@@ -2,6 +2,48 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-24 · The follower now copies the leader with no snap at start
+
+Both arms were recalibrated with `so101-calibrate` from the same pose, so
+the same physical pose now reads as the same numbers on both. Before, the
+wrist roll read half a turn apart and the elbow 13° apart, which is why the
+follower jumped when teleop started. After, `so101-teleop` ran on the real
+arms with no snap, with the wrist camera live in the viewer.
+
+| Claim | Number | Where |
+|---|---|---|
+| Gap before, wrist_roll | 174.3° | `outputs/hw/alignment-before.json` (local) |
+| Gap before, elbow_flex | 13.1° (expected 10-13°) | same |
+| Largest gap after | 3.7° (shoulder_pan; limit 5°) | `outputs/hw/alignment-after.json` (local) |
+| Largest gap the next day, after a power cycle | 2.5° | `outputs/hw/alignment-20261024T164739Z.json` (local) |
+| Wrist camera | 640x480 at 30 fps, measured | `configs/local.yaml` (local) |
+| `so101-align` on the real arms | refused at 174° before, passed at 3.7° after | the two files above |
+| `so101-doctor --open-cameras` | nothing failed, both ports and the wrist camera | run 2026-10-24 |
+
+**Ports.** Found with the same unplug test `so101-find-ports` uses (unplug
+the leader; the port that vanishes is the leader's), done by hand because
+the agent's shell cannot answer the script's ENTER prompts. Leader
+`/dev/cu.usbmodem5B8E1127961`, follower `/dev/cu.usbmodem5B8E1139851`.
+
+**Camera.** One wrist camera on the follower's gripper (`USB2.0_CAM1`),
+shown live in `so101-teleop --display` after the Rerun viewer was added
+(LeRobot's `viz` extra, now a dependency) and the lens refocused by hand.
+
+### What we learned
+
+**The wrist-roll zero comes from the middle pose.** LeRobot sets each
+joint's zero from the pose you hold when you press ENTER, and it never
+sweeps the wrist roll. So both arms must be in the same middle pose, wrist
+rotated the same way, or they disagree by whatever the two wrists differed.
+
+**macOS camera permission had to be asked for, not reset.** OpenCV only
+checks the permission and never asks, so no prompt appears. A short Swift
+call to `AVCaptureDevice.requestAccess` brought the prompt up. The steps are
+in the `so101-arm-init` skill.
+
+**Camera indices move.** With the wrist camera unplugged, the MacBook camera
+takes index 0 and `so101-doctor --open-cameras` still passes.
+
 ## 2026-10-23 · A trained policy can be run on the follower and each trial scored
 
 `so101-eval` runs a checkpoint on the follower with LeRobot's
