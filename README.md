@@ -10,12 +10,12 @@ collection, policy training). Keeping them in one repo means calibration,
 arm config and hardware notes are written once and every project uses the
 same version.
 
-## Where it's at (2026-10-23)
+## Where it's at (2026-10-24)
 
 - Done: the bring-up tools (#13-#18), teleop safety (#63, #64: a 5° per-update cap and a read-only `so101-align` check), the BOM and the runbook [`docs/setup.md`](docs/setup.md). Tested with fakes only.
-- Done: both arms assembled, given IDs and calibrated with LeRobot directly (#30, #44). Teleop worked only through a temporary controller, because the two calibrations disagree by about 10° at the elbow.
-- Doing: the full setup on the real arms (#65, #66, #31, #32, #33): real ports, camera, a matched recalibration, `so101-teleop`, a first dataset.
-- Doing: Phase 2 tooling in [`projects/act-policy`](projects/act-policy): `so101-train` (#79) and `so101-eval` (#81) for ACT (#68).
+- Done: the real arms run `so101-teleop` with no snap, after a matched recalibration (largest gap 3.7°, was 174° at the wrist roll), with the wrist camera live (#31, #32).
+- Doing: the first 5-episode dataset (#33) and the hardware notes in `docs/setup.md`.
+- Done: Phase 2 tooling, tested with fakes, in [`projects/act-policy`](projects/act-policy): `so101-train` (#79) and `so101-eval` (#81) for ACT (#68).
 - Next: record 50 episodes, train ACT, score 10 trials against the pre-registered 5/10 (#76-#83); then SmolVLA (#69).
 
 ## Pipeline
