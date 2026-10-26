@@ -28,8 +28,10 @@ Full runbook with every message and failure: `docs/setup.md`.
 - **The follower moves only with the owner at the arms.** Say what will move
   before each such command.
 - **Power:** supplies off until step 3. Ports, doctor and camera need USB
-  only. Both supplies are 5 V (`hardware/bom.md`); a 12 V supply never goes
-  on the leader. Power off whenever something buzzes, stalls or gets hot.
+  only. Leader 5 V, follower 12 V: the follower has 12 V servos
+  (2026-10-26: `Max_Voltage_Limit` 14.0 V on all six, `hardware/bom.md`).
+  The 12 V supply never goes on the leader. In step 3 ask "leader on 5 V,
+  follower on 12 V?". Power off whenever something buzzes, stalls or gets hot.
 
 ## Quick path (arms already calibrated)
 

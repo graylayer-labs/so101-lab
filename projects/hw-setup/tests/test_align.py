@@ -15,6 +15,9 @@ from so101.machine_config import load_machine_config
 
 REPO = Path(__file__).parents[3]
 EXAMPLE = REPO / "configs" / "example.yaml"
+# The arms' first calibration, frozen: the hand-computed degrees below use its
+# ranges, so a recalibration of the real arms must not change these tests.
+FIXTURES = Path(__file__).parent / "fixtures"
 NOW = datetime(2026, 10, 23, 9, 30, 0, tzinfo=UTC)
 
 
@@ -23,7 +26,7 @@ def root(tmp_path: Path) -> Path:
     for arm in ("leader", "follower"):
         target = tmp_path / "hardware" / "calibration" / arm
         target.mkdir(parents=True)
-        shutil.copy(REPO / "hardware" / "calibration" / arm / "main.json", target)
+        shutil.copy(FIXTURES / f"{arm}_main.json", target / "main.json")
     (tmp_path / "configs").mkdir()
     (tmp_path / "configs" / "local.yaml").write_text(EXAMPLE.read_text())
     return tmp_path
@@ -100,7 +103,7 @@ def test_raw_ticks_read_as_hand_computed_degrees_and_percent(
     Homing does not enter: the motor applies Homing_Offset itself and
     reports Present_Position = Actual_Position - Homing_Offset
     (motors/feetech/feetech.py L278-282), so the raw tick read is already
-    homed. Ranges are those of the committed hardware/calibration/*/main.json.
+    homed. Ranges are those of tests/fixtures/<arm>_main.json.
     """
     factory, _ = fake_arms(
         raw_ticks={
