@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "so101-lab on AWS: the SageMaker training route (planned)",
+    "output": ".archify/architecture-sagemaker-route-20261026/sagemaker-route.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "laptop", "type": "external", "label": "Laptop", "sublabel": "profile so101-lab", "pos": [40, 300], "size": [150, 64] },
+    { "id": "agentrole", "type": "security", "label": "Project role", "sublabel": "so101-lab-agent", "pos": [40, 120], "size": [150, 64], "tag": "jobs so101-lab-* only" },
+    { "id": "bucket", "type": "database", "label": "S3 bucket", "sublabel": "so101-lab-data-eu-west1", "pos": [420, 300], "size": [180, 64], "tag": "versioned, private" },
+    { "id": "job", "type": "cloud", "label": "Training job", "sublabel": "ml.g5.xlarge, spot", "pos": [800, 300], "size": [170, 64], "tag": "needs GPU quota (0)" },
+    { "id": "image", "type": "cloud", "label": "PyTorch DLC", "sublabel": "+ lerobot 0.6.1", "pos": [1080, 300], "size": [150, 64] },
+    { "id": "execrole", "type": "security", "label": "Training role", "sublabel": "so101-lab-sagemaker-exec", "pos": [800, 480], "size": [170, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "AWS eu-west-1 (planned, nothing exists yet)", "wraps": ["bucket", "job", "image", "execrole"] }
+  ],
+  "connections": [
+    { "id": "data", "from": "laptop", "to": "bucket", "label": "upload data, pull checkpoints", "variant": "emphasis" },
+    { "id": "io", "from": "bucket", "to": "job", "label": "data in, checkpoints out", "variant": "emphasis" },
+    { "id": "pull", "from": "image", "to": "job", "label": "pull image" },
+    { "id": "assume", "from": "laptop", "to": "agentrole", "label": "assume", "variant": "security", "fromSide": "top", "toSide": "bottom" },
+    { "id": "start", "from": "agentrole", "to": "job", "label": "CreateTrainingJob, max 11 h", "variant": "security", "fromSide": "right", "toSide": "top" },
+    { "id": "runas", "from": "job", "to": "execrole", "label": "runs as", "variant": "dashed", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "rose", "title": "Spend guards", "items": ["Max run 11 h on spot: worst case about EUR 15", "Account budget USD 70/month alerts", "Nothing bills per hour until a job runs"] },
+    { "dot": "cyan", "title": "Why this shape", "items": ["Stock AWS PyTorch image: no ECR to build", "Checkpoint every 5k steps: spot can stop and resume", "Same bucket feeds SmolVLA later"] },
+    { "dot": "emerald", "title": "Blocked on", "items": ["Your yes to bucket + roles (about EUR 0.40/month)", "AWS granting a SageMaker GPU quota"] }
+  ]
+}
