@@ -17,7 +17,7 @@ same version.
 - Done: a first 5-episode dataset recorded on the real arms and loaded with `LeRobotDataset` (#33).
 - Built, tested with fakes, waiting on the arms: Phase 2 tooling in [`projects/act-policy`](projects/act-policy): `so101-train` (#79) and `so101-eval` (#81) for ACT (#68).
 - Planned: ACT trains on the laptop while every AWS GPU quota is 0; SageMaker once one is granted ([`docs/training-plan.md`](docs/training-plan.md), #101).
-- Next: smoke run and control-rate check, record 50 episodes, train ACT, score 10 trials against the pre-registered 5/10 (#76-#83, #104); then SmolVLA (#69).
+- Next: smoke run and control-rate check, record 50 episodes, train ACT, score 10 trials against the pre-registered expectation, which #76 revises for one camera and the laptop checkpoint (#76-#83, #104); then SmolVLA (#69).
 
 ## Pipeline
 

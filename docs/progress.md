@@ -15,14 +15,14 @@ with two diagrams, is [`docs/training-plan.md`](training-plan.md).
 | Steps where ACT reached 10/10 elsewhere (30 SO-101 episodes, M2 Mac) | 20k | [classmethod](https://dev.classmethod.jp/articles/so-arm101-duck-pick-imitation-learning-mac-training/) |
 | Laptop steps per 2 h run (estimate) | about 9k-14k | `docs/training-plan.md` |
 | SageMaker g5.xlarge spot, 100k steps (estimate) | about EUR 2-3 | same |
-| GPU quotas above 0 | none | aws-manager review in #101 |
+| GPU quotas above 0 | none | aws-manager review, comment on #101 |
 
 ![From demos to a scored policy](figures/2026-10-26-act-pipeline.png)
 
 ### What we learned
 
 **A first ACT does not need 100k steps.** One SO-101 report scored 10/10
-at 20k steps and 9/10 at 30k, so the laptop can get there in 2-3 runs.
+at 20k steps and 9/10 at 30k, so the laptop can get there in 2-4 runs.
 
 **The free SageMaker GPU is gone.** Studio Lab stopped taking new sign-ups
 in July 2026, and notebook GPUs need their own quotas, which are 0 as well.
