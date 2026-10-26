@@ -449,7 +449,7 @@ PASS  cameras: 2 listed, 2 configured (compares counts only)
 
 With the arms attached the ports line turns PASS, and the script ends with
 `Nothing failed.` (exit 0), as on 2026-10-24 with both arms and the wrist
-camera. Real output, 2026-10-26, `--open-cameras` (port names replaced):
+camera. Real output, 2026-10-26, `--open-cameras` (port names replaced; the `listed by pyserial` line and the counts-only note left out):
 
 ```text
 PASS  python: 3.12.12
@@ -657,8 +657,10 @@ to expect while it runs:
   while the dataset is written, then goes limp. That pause is not a stall.
 - The arm puts the block in; you take it out by hand during the reset.
 
-Real output, start and end (the `Command:` line and LeRobot's per-episode
-log left out):
+Real output, start and end, copied from the terminal of the 2026-10-26 run
+(`so101-record` does not save its alignment reading; the copy is in
+`outputs/hw/record-20261026-start-end.txt`, local). The `Command:` line and
+LeRobot's per-episode log are left out:
 
 ```text
 Calibration checked: leader and follower pass.
