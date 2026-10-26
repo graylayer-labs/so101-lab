@@ -608,6 +608,23 @@ Optional: `--dataset-root PATH` (outside the repo), `--episode-time-s`,
 `--reset-time-s` and `--fps` (LeRobot's defaults: 60 s, 60 s, 30 fps),
 `--no-cameras`, `--display`.
 
+**On the real arms (2026-10-26).** First dataset: 5 episodes of "Pick up the
+block and place it in the plant pot", wrist camera only, 30 s episodes and
+20 s resets. 4,500 frames, 18 MB, and it loads with `LeRobotDataset`. What
+to expect while it runs:
+
+- After the `Command:` line it prints nothing for about 25 to 40 s while
+  LeRobot loads and connects. Wait: the Rerun viewer opens and the Mac says
+  "Recording episode 0". A Ctrl-C in that gap stops it before anything is
+  written.
+- The keys (right arrow ends an episode early, left arrow re-records it,
+  Esc stops) only work if the terminal app has Accessibility permission:
+  System Settings > Privacy & Security > Accessibility. Without it, every
+  episode runs the full `--episode-time-s`.
+- After the last episode the follower holds its pose, still powered,
+  while the dataset is written, then goes limp. That pause is not a stall.
+- The arm puts the block in; you take it out by hand during the reset.
+
 **If it fails:**
 
 | What you see | What to do |
@@ -740,12 +757,14 @@ already.
 | `so101-doctor` cameras FAIL on macOS | Camera permission. | System Settings > Privacy & Security > Camera, switch on your terminal, restart it. |
 | `camera access has been denied` and no prompt ever appears | OpenCV checks the permission but never asks for it. | The `tccutil reset` and `swift` commands in [Before you start](#before-you-start), step 4. |
 | The camera shows the wrong picture | OpenCV indices on macOS follow plug order. | Plug the camera in, look at a frame from each index and set `index` in `configs/local.yaml`. |
+| `so101-record` prints nothing after `Command:` | LeRobot is still loading (about 25 s on the first run). | Wait up to a minute for the viewer and "Recording episode 0". |
+| Arrow keys do nothing during `so101-record` | The terminal app has no Accessibility permission. | System Settings > Privacy & Security > Accessibility, switch on your terminal, restart it. |
 | Motor or calibration errors after changing a servo | The servo's ID or calibration no longer matches. | Step 2 for that arm, then Step 4. |
 
 ## What has not been tested on hardware
 
-Every script is tested with fakes. On 2026-10-23 and 2026-10-24 Steps 1
-(by hand), 4, 5 and 6 ran on the real arms. The arms were assembled and
+Every script is tested with fakes. Between 2026-10-23 and 2026-10-26 Steps 1
+(by hand), 4, 5, 6 and 7 ran on the real arms. The arms were assembled and
 given IDs before these scripts existed (#39), outside them.
 
 | Step | Tested | Not yet seen |
@@ -756,7 +775,7 @@ given IDs before these scripts existed (#39), outside them.
 | 4. `so101-calibrate` | Backup, diff, checks and failure paths with a fake LeRobot; a real `c` run on both arms (2026-10-23) | A real `--move-corrupt`; the Ctrl-C and half-written-file restore |
 | 5. `so101-doctor` | Checks with fakes; all PASS on the real arms with `--open-cameras` | That it opened the right camera (it cannot tell yet) |
 | 6. `so101-teleop` | Gate and command line; on the real arms with and without the camera, and `--display` | - |
-| 7. `so101-record` | Gate, dataset checks and command line, parsed by LeRobot's `RecordConfig` | A real episode written, and `--resume` on a real dataset |
+| 7. `so101-record` | Gate, dataset checks and command line, parsed by LeRobot's `RecordConfig`; 5 real episodes with the wrist camera (2026-10-26) | `--resume` on a real dataset; the episode keys (no Accessibility permission yet) |
 | 8. `so101-eval` | Gates, trial log and command line, parsed by LeRobot's `RolloutConfig` with a checkpoint saved by LeRobot's own config savers | A real rollout; the return to the start pose; the control rate on mps (#81) |
 
 The calibration files in `hardware/calibration/` were made with
@@ -778,4 +797,4 @@ Issue numbers are the owner's steps on the board.
 - [x] Leader calibrated; file in `hardware/calibration/leader/` (#31).
 - [x] `so101-doctor --open-cameras` all PASS.
 - [x] Teleoperation: the follower tracks the leader (#32).
-- [ ] First dataset recorded locally (#33).
+- [x] First dataset recorded locally (#33).
