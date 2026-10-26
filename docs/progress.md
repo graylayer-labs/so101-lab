@@ -14,7 +14,7 @@ whole path from arms to dataset now works end to end.
 | Episodes, frames | 5, 4,500 at 30 fps (pre-registered: 2,000-3,000, at 15-20 s each) | `outputs/hw/dataset-summary.json` (local) |
 | Loads with `LeRobotDataset` | yes: state and action (6 joints), wrist image 640x480 | same |
 | Size on disk | 18 MB, outside the repo | `~/.cache/huggingface/lerobot/graylayer/so101-first` |
-| Largest leader-follower gap before recording | 2.5° (limit 5°) | printed by `so101-record`'s alignment check |
+| Largest leader-follower gap before recording | 2.5° (elbow_flex; limit 5°), printed by `so101-record`, which does not save it; 3.0° in the last saved check 15 min earlier | `outputs/hw/alignment-20261026T142859Z.json` (local) |
 | `so101-doctor --open-cameras` | nothing failed | `outputs/hw/doctor-20261026T143345Z.txt` (local) |
 | Episodes where the block reached the pot | 4 of 5 (episode 1 still held it at 30 s) | wrist video, checked by eye |
 
@@ -40,8 +40,11 @@ it loads, and the follower holds still while the dataset is saved at the
 end. Both looked like faults the first time.
 
 **The wrist camera points at the ceiling at rest.** It sees the grasp well
-but not the table until the arm reaches down. A fixed second camera is an
-open question for the owner.
+but not the table until the arm reaches down. Decided (#89): keep the one
+camera, start each episode with the wrist bent so it sees the table, and
+move it to a fixed mount later as a separate dataset.
+
+Replaying an episode in simulation, also asked for in #33, moved to #24.
 
 ## 2026-10-24 · The follower now copies the leader with no snap at start
 
