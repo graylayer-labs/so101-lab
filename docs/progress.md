@@ -14,7 +14,7 @@ whole path from arms to dataset now works end to end.
 | Episodes, frames | 5, 4,500 at 30 fps (pre-registered: 2,000-3,000, at 15-20 s each) | `outputs/hw/dataset-summary.json` (local) |
 | Loads with `LeRobotDataset` | yes: state and action (6 joints), wrist image 640x480 | same |
 | Size on disk | 18 MB, outside the repo | `~/.cache/huggingface/lerobot/graylayer/so101-first` |
-| Largest leader-follower gap before recording | 2.5° (elbow_flex; limit 5°), printed by `so101-record`, which does not save it; 3.0° in the last saved check 15 min earlier | `outputs/hw/alignment-20261026T142859Z.json` (local) |
+| Largest leader-follower gap before recording | 2.5° (elbow_flex; limit 5°), printed by `so101-record`, which does not save it; 3.0° in the last saved check 15 min earlier | `outputs/hw/alignment-20261026T143039Z.json` (local) |
 | `so101-doctor --open-cameras` | nothing failed | `outputs/hw/doctor-20261026T143345Z.txt` (local) |
 | Episodes where the block reached the pot | 4 of 5 (episode 1 still held it at 30 s) | wrist video, checked by eye |
 
