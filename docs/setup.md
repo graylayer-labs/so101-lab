@@ -5,9 +5,10 @@ Each step below says what its script checks before it asks LeRobot to touch
 a servo, the exact command, what the dry run prints, and what to do when it
 fails.
 
-**On 2026-10-23 and 2026-10-24 Steps 1, 4, 5 and 6 ran on the real arms**
-(notes below each step). Output blocks are still mostly `--dry-run`s or
-error cases from a laptop with no arm attached. See
+**From 2026-10-23 to 2026-10-26 Steps 1 (by hand, not the script), 4, 5, 6
+and 7 ran on the real arms** (notes below each step). Steps 5, 6 and 7 show
+a real output block; the others show `--dry-run`s or error cases from a
+laptop with no arm attached, and Step 4's real run was not saved. See
 [What has not been tested on hardware](#what-has-not-been-tested-on-hardware).
 
 Outputs are shown with `<root>` for the workspace folder and `<home>` for the
@@ -448,7 +449,23 @@ PASS  cameras: 2 listed, 2 configured (compares counts only)
 
 With the arms attached the ports line turns PASS, and the script ends with
 `Nothing failed.` (exit 0), as on 2026-10-24 with both arms and the wrist
-camera.
+camera. Real output, 2026-10-26, `--open-cameras` (port names replaced):
+
+```text
+PASS  python: 3.12.12
+PASS  lerobot: 0.6.1 (pinned)
+PASS  workspace: <root>
+PASS  config: <root>/configs/local.yaml is valid
+PASS  ports: both arm ports present
+        leader: /dev/cu.usbmodem000000000N found
+        follower: /dev/cu.usbmodem000000000N found
+PASS  calibration: leader and follower pass the checks
+PASS  cameras: 2 listed, 1 configured (compares counts only)
+        listed by the OS: USB2.0_CAM1, MacBook Pro Camera
+        wrist (index 0): opened, frame read
+
+Nothing failed.
+```
 
 **A PASS does not prove it opened the right camera.** On macOS the OpenCV
 indices follow plug order. With the wrist camera unplugged, the MacBook
@@ -532,6 +549,21 @@ recalibration and passed after it; teleop then ran with no snap.
 `--display` opens a Rerun window; it needs LeRobot's `viz` extra, which
 hw-setup installs. The wrist camera's picture was blurred until its lens was
 twisted to focus at the gripper.
+
+Real `so101-align` output, 2026-10-26, after moving the leader to match
+(the first reading had shoulder_pan 9.5° and wrist_roll 6.8° OVER):
+
+```text
+joint             leader  follower      diff   limit  status
+shoulder_pan       -2.0°      1.0°     -3.0°    5.0°  ok
+shoulder_lift    -101.5°   -103.2°     +1.8°    5.0°  ok
+elbow_flex         99.5°     97.0°     +2.5°    5.0°  ok
+wrist_flex       -101.0°   -100.4°     -0.5°    5.0°  ok
+wrist_roll         82.2°     82.2°     +0.1°    5.0°  ok
+gripper             0.3%      0.5%     -0.2%    5.0%  ok
+Saved: outputs/hw/alignment-20261026T142859Z.json
+Aligned: every joint within 5.0.
+```
 
 **To stop teleop, rest the follower on the table first, then press Ctrl-C.**
 LeRobot switches the follower's torque off when it disconnects, so it goes
@@ -624,6 +656,33 @@ to expect while it runs:
 - After the last episode the follower holds its pose, still powered,
   while the dataset is written, then goes limp. That pause is not a stall.
 - The arm puts the block in; you take it out by hand during the reset.
+
+Real output, start and end (the `Command:` line and LeRobot's per-episode
+log left out):
+
+```text
+Calibration checked: leader and follower pass.
+joint             leader  follower      diff   limit  status
+shoulder_pan        1.3°      1.5°     -0.2°    5.0°  ok
+shoulder_lift    -101.5°   -101.8°     +0.3°    5.0°  ok
+elbow_flex         99.5°     96.9°     +2.5°    5.0°  ok
+wrist_flex       -101.0°   -100.3°     -0.7°    5.0°  ok
+wrist_roll         82.8°     83.0°     -0.3°    5.0°  ok
+gripper             0.5%      0.6%     -0.1%    5.0%  ok
+Alignment checked: every joint within 5.0.
+Dataset: graylayer/so101-first (new dataset)
+Dataset root: <home>/.cache/huggingface/lerobot/graylayer/so101-first
+Task: Pick up the block and place it in the plant pot
+Episodes: 5
+Push to Hub: no
+Movement cap: 5.0 per update (degrees for body joints, % of range for the gripper)
+...
+INFO ... Stop recording
+INFO ... OpenCVCamera(0) disconnected.
+INFO ... main SOFollower disconnected.
+INFO ... main SOLeader disconnected.
+INFO ... Exiting
+```
 
 **If it fails:**
 
