@@ -85,7 +85,7 @@ accounts.
 | Step | Item | Blocked by |
 |---|---|---|
 | Write the task, the expected score and the checkpoint that counts | #76 | - |
-| 1k-step smoke run on the 5 recorded episodes | #79 | - |
+| 1k-step smoke run on the 5 recorded episodes | #79 | #76 (the expectation is written before any training) |
 | Measure the control rate with the smoke checkpoint | #81 | #79 |
 | Record 50 demos (about 20 s each), resolution set by the rate | #78 | #76, #77, #81 |
 | Train 20k-30k steps on the laptop | #104 | #78, #79 |
