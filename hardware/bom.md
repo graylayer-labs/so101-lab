@@ -14,7 +14,7 @@ actually bought or received.
 
 | Part | Qty | Source | Notes |
 |---|---|---|---|
-| Feetech STS3215 servo, 7.4 V, 1/345 (C001), follower | 6 | [Alibaba](https://www.alibaba.com/product-detail/Top-Seller-Low-Cost-Feetech-STS3215_1600999461525.html) | EUR 12.2 each (USD 13.89). **Confirm (#29)**: 7.4 V or 12 V variant. |
+| Feetech STS3215 servo, 12 V, 1/345 (C001), follower | 6 | [Alibaba](https://www.alibaba.com/product-detail/Top-Seller-Low-Cost-Feetech-STS3215_1600999461525.html) | EUR 12.2 each (USD 13.89). Ours are the 12 V variant (servo voltage limit 14.0 V, read 2026-10-26). |
 | Feetech STS3215 servo, 7.4 V, leader, geared per table below | 6 | [Alibaba bundle of all six](https://www.alibaba.com/product-detail/6PCS-7-4V-STS3215-Servos-for_1601428584027.html) | 3 x 1/147 (C046), 2 x 1/191 (C044), 1 x 1/345 (C001). EUR 12.2 each (USD 13.89); bundle price not listed upstream. **Confirm (#29)**: the gear mix, by the C0xx label on each servo. |
 | Servo bus controller board (Waveshare) | 2 | [Amazon.fr](https://www.amazon.fr/-/en/dp/B0CJ6TP3TP/) | One per arm. EUR 11.4 each (USD 10.6). **Confirm (#29)**: model and jumper position. |
 | Power supply: leader 5 V, follower 12 V (5 A or more) | 2 | [Amazon.fr](https://www.amazon.fr/-/en/dp/B01HRR9GY4/) | One per arm. EUR 15.7 each (USD 10). The leader's supply is always 5 V. Only the follower's changes: 12 V, 5 A or more, if it has 12 V servos (see below). Ours (2026-10-26): leader 5 V, follower 12 V; the follower servos read `Max_Voltage_Limit` 14.0 V, so they are the 12 V variant. |

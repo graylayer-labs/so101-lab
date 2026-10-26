@@ -77,6 +77,10 @@ unless a step fails. Use short questions they can answer in one word.
    ```
 
    Expect about the configured fps. Wrong picture: camera fix below.
+   The one camera is either on the wrist (config name `wrist`, jaws in
+   view) or on a fixed mount (name `front`, table and gripper in view);
+   check the picture matches the name. Moving it means renaming the key
+   and recording into a new dataset, never `--resume` on the old one.
    Blurred: ask the owner to check for lens film and twist the lens.
 3. **Power on (owner).** Ask: "Both supplies on, both arms resting in the
    same pose?" One word back.
