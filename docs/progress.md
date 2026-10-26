@@ -2,6 +2,47 @@
 
 Newest first. One entry per merged task or chunk.
 
+## 2026-10-26 · The arms recorded a first dataset that LeRobot can load
+
+With the owner driving the leader, `so101-record` saved 5 episodes of one
+task, "Pick up the block and place it in the plant pot", with the wrist
+camera. This is the first real data the ACT training tools can read, so the
+whole path from arms to dataset now works end to end.
+
+| Claim | Number | Where |
+|---|---|---|
+| Episodes, frames | 5, 4,500 at 30 fps (pre-registered: 2,000-3,000, at 15-20 s each) | `outputs/hw/dataset-summary.json` (local) |
+| Loads with `LeRobotDataset` | yes: state and action (6 joints), wrist image 640x480 | same |
+| Size on disk | 18 MB, outside the repo | `~/.cache/huggingface/lerobot/graylayer/so101-first` |
+| Largest leader-follower gap before recording | 2.5° (limit 5°) | printed by `so101-record`'s alignment check |
+| `so101-doctor --open-cameras` | nothing failed | `outputs/hw/doctor-20261026T143345Z.txt` (local) |
+| Episodes where the block reached the pot | 4 of 5 (episode 1 still held it at 30 s) | wrist video, checked by eye |
+
+![The wrist camera 20 s into each episode](figures/2026-10-26-first-dataset-grasps.jpg)
+
+The wrist camera 20 s into each of the five episodes: the block sits
+between the jaws, and in two frames the pot is behind it.
+
+### What we learned
+
+**Frames came out above the forecast because no episode ended early.** The
+right arrow key should end an episode, but the terminal had no macOS
+Accessibility permission, so every episode ran its full 30 s. That
+permission is now in `docs/setup.md`.
+
+**The follower runs 12 V servos.** The parts list assumed 5 V for both arms.
+Reading the servos' own voltage limit settled it: 14.0 V on all six follower
+servos, so they are the 12 V variant on a 12 V supply. The leader stays on
+5 V. `hardware/bom.md` records it.
+
+**A quiet start is not a hang.** LeRobot prints nothing for about 25 s while
+it loads, and the follower holds still while the dataset is saved at the
+end. Both looked like faults the first time.
+
+**The wrist camera points at the ceiling at rest.** It sees the grasp well
+but not the table until the arm reaches down. A fixed second camera is an
+open question for the owner.
+
 ## 2026-10-24 · The follower now copies the leader with no snap at start
 
 Both arms were recalibrated with `so101-calibrate` from the same pose, so
