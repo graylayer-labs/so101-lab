@@ -1,0 +1,256 @@
+{
+ "schema_version": 2,
+ "diagram_type": "workflow",
+ "meta": {
+  "title": "ACT on the SO-101: from demos to a scored policy",
+  "quality_profile": "showcase",
+  "output": ".archify/workflow-act-pipeline-20261026c/act-pipeline.html"
+ },
+ "lanes": [
+  {
+   "id": "arms",
+   "label": "At the arms (you)"
+  },
+  {
+   "id": "laptop",
+   "label": "Laptop (M4, MPS): the route now"
+  },
+  {
+   "id": "cloud",
+   "label": "SageMaker: once a GPU quota is granted",
+   "variant": "exception"
+  }
+ ],
+ "phases": [
+  {
+   "id": "probe",
+   "label": "Probe on 5 episodes",
+   "fromCol": 0,
+   "toCol": 2,
+   "variant": "dashed"
+  },
+  {
+   "id": "train",
+   "label": "Record + train",
+   "fromCol": 3,
+   "toCol": 4,
+   "variant": "emphasis"
+  },
+  {
+   "id": "score",
+   "label": "Score",
+   "fromCol": 5,
+   "toCol": 5
+  }
+ ],
+ "groups": [
+  {
+   "id": "quota_wait",
+   "label": "GPU quota is 0 today",
+   "lane": "cloud",
+   "fromCol": 4,
+   "toCol": 5,
+   "variant": "security"
+  }
+ ],
+ "mainPath": [
+  "first",
+  "smoke",
+  "rate",
+  "demos",
+  "ltrain",
+  "policy",
+  "trials"
+ ],
+ "nodes": [
+  {
+   "id": "first",
+   "lane": "arms",
+   "col": 0,
+   "type": "database",
+   "label": "First dataset",
+   "sublabel": "5 episodes, recorded",
+   "width": 150
+  },
+  {
+   "id": "demos",
+   "lane": "arms",
+   "col": 3,
+   "type": "external",
+   "label": "50 teleop demos",
+   "sublabel": "about 20 s each",
+   "width": 150
+  },
+  {
+   "id": "trials",
+   "lane": "arms",
+   "col": 5,
+   "type": "external",
+   "label": "10 real trials",
+   "sublabel": "scored vs written guess",
+   "width": 150
+  },
+  {
+   "id": "smoke",
+   "lane": "laptop",
+   "col": 1,
+   "type": "backend",
+   "label": "Smoke run",
+   "sublabel": "1k steps: flags work",
+   "width": 150
+  },
+  {
+   "id": "rate",
+   "lane": "laptop",
+   "col": 2,
+   "type": "security",
+   "label": "Control-rate check",
+   "sublabel": "25 Hz+ keeps 640x480",
+   "width": 150
+  },
+  {
+   "id": "ltrain",
+   "lane": "laptop",
+   "col": 4,
+   "type": "backend",
+   "label": "Laptop training",
+   "sublabel": "20-30k steps, 2 h runs",
+   "width": 150
+  },
+  {
+   "id": "policy",
+   "lane": "laptop",
+   "col": 5,
+   "type": "backend",
+   "label": "Policy drives arm",
+   "sublabel": "checkpoint fixed in advance",
+   "width": 150
+  },
+  {
+   "id": "upload",
+   "lane": "cloud",
+   "col": 3,
+   "type": "cloud",
+   "label": "S3 bucket",
+   "sublabel": "dataset + checkpoints",
+   "width": 150
+  },
+  {
+   "id": "train",
+   "lane": "cloud",
+   "col": 4,
+   "type": "cloud",
+   "label": "Spot training job",
+   "sublabel": "ml.g5.xlarge, 100k steps",
+   "width": 150
+  },
+  {
+   "id": "ckpt",
+   "lane": "cloud",
+   "col": 5,
+   "type": "database",
+   "label": "100k checkpoint",
+   "sublabel": "separate comparison",
+   "width": 150
+  }
+ ],
+ "edges": [
+  {
+   "id": "probe",
+   "from": "first",
+   "to": "smoke",
+   "variant": "emphasis",
+   "fromSide": "bottom",
+   "toSide": "left"
+  },
+  {
+   "id": "time",
+   "from": "smoke",
+   "to": "rate",
+   "variant": "emphasis"
+  },
+  {
+   "id": "sets",
+   "from": "rate",
+   "to": "demos",
+   "label": "sets resolution",
+   "variant": "emphasis",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "fit",
+   "from": "demos",
+   "to": "ltrain",
+   "variant": "emphasis",
+   "fromSide": "right",
+   "toSide": "top"
+  },
+  {
+   "id": "load",
+   "from": "ltrain",
+   "to": "policy",
+   "variant": "emphasis"
+  },
+  {
+   "id": "act",
+   "from": "policy",
+   "to": "trials",
+   "label": "drive",
+   "variant": "emphasis"
+  },
+  {
+   "id": "up",
+   "from": "demos",
+   "to": "upload",
+   "label": "upload",
+   "variant": "dashed",
+   "role": "branch"
+  },
+  {
+   "id": "job",
+   "from": "upload",
+   "to": "train",
+   "variant": "dashed"
+  },
+  {
+   "id": "save",
+   "from": "train",
+   "to": "ckpt",
+   "variant": "dashed"
+  },
+  {
+   "id": "pull",
+   "from": "ckpt",
+   "to": "policy",
+   "label": "pull",
+   "variant": "dashed"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Doable now",
+   "items": [
+    "Smoke run + rate check on the 5 episodes",
+    "Then record 50 demos and train on the laptop"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Waiting on AWS",
+   "items": [
+    "SageMaker GPU quota above 0",
+    "Bucket + roles (about EUR 0.40/month)"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "Not used",
+   "items": [
+    "No simulation, no sim2real",
+    "No pretraining of our own: ACT uses an ImageNet ResNet18"
+   ]
+  }
+ ]
+}
